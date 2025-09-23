@@ -1,0 +1,180 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "AdminDetectGui"
+gui.Parent = game:GetService("CoreGui")
+
+-- Main Frame
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 300, 0, 120)
+Main.Position = UDim2.new(0.5, -150, 0.5, -60)
+Main.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Parent = gui
+
+local UICorner = Instance.new("UICorner", Main)
+UICorner.CornerRadius = UDim.new(0, 10)
+
+-- Title Bar
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -35, 0, 30)
+Title.Position = UDim2.new(0,0,0,0)
+Title.BackgroundColor3 = Color3.fromRGB(40,40,40)
+Title.Text = "DETEKSI ADMIN"
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.BorderSizePixel = 0
+Title.Parent = Main
+local UICorner2 = Instance.new("UICorner", Title)
+UICorner2.CornerRadius = UDim.new(0,10)
+
+game:GetService("StarterGui"):SetCore("SendNotification", { 
+	Title = "Type | Fly";
+	Text = "Developer TikTok : NazamOffcial1";
+	Icon = "rbxthumb://type=Asset&id=109307269006494&w=150&h=150"})
+Duration = 5;
+
+-- Tombol X
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -30, 0, 0)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 16
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Parent = Main
+local CloseCorner = Instance.new("UICorner", CloseBtn)
+CloseCorner.CornerRadius = UDim.new(0,6)
+
+-- Floating Button
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Size = UDim2.new(0, 50, 0, 50)
+FloatBtn.Position = UDim2.new(0, 20, 1, -100)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+FloatBtn.Text = "DA"
+FloatBtn.TextColor3 = Color3.fromRGB(255,255,255)
+FloatBtn.Font = Enum.Font.GothamBold
+FloatBtn.TextSize = 16
+FloatBtn.Visible = false
+FloatBtn.Parent = gui
+local FloatCorner = Instance.new("UICorner", FloatBtn)
+FloatCorner.CornerRadius = UDim.new(1,0)
+
+-- Holder
+local OwnerLabel = Instance.new("TextLabel")
+OwnerLabel.Size = UDim2.new(1, -20, 0, 30)
+OwnerLabel.Position = UDim2.new(0,10,0,35)
+OwnerLabel.BackgroundTransparency = 1
+OwnerLabel.Text = "Owner : 0"
+OwnerLabel.TextColor3 = Color3.fromRGB(255,255,255)
+OwnerLabel.Font = Enum.Font.GothamBold
+OwnerLabel.TextSize = 16
+OwnerLabel.TextXAlignment = Enum.TextXAlignment.Left
+OwnerLabel.Parent = Main
+
+local AdminLabel = Instance.new("TextLabel")
+AdminLabel.Size = UDim2.new(1, -20, 0, 30)
+AdminLabel.Position = UDim2.new(0,10,0,70)
+AdminLabel.BackgroundTransparency = 1
+AdminLabel.Text = "Admin : 0"
+AdminLabel.TextColor3 = Color3.fromRGB(255,255,255)
+AdminLabel.Font = Enum.Font.GothamBold
+AdminLabel.TextSize = 16
+AdminLabel.TextXAlignment = Enum.TextXAlignment.Left
+AdminLabel.Parent = Main
+
+-- Tombol Start
+local StartBtn = Instance.new("TextButton")
+StartBtn.Size = UDim2.new(0, 80, 0, 25)
+StartBtn.Position = UDim2.new(1, -90, 1, -35)
+StartBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+StartBtn.Text = "START"
+StartBtn.TextColor3 = Color3.fromRGB(255,255,255)
+StartBtn.Font = Enum.Font.GothamBold
+StartBtn.TextSize = 14
+StartBtn.BorderSizePixel = 0
+StartBtn.Parent = Main
+local StartCorner = Instance.new("UICorner", StartBtn)
+StartCorner.CornerRadius = UDim.new(0,6)
+
+-- Keyword
+local ownerKeywords = {"owner","dev","developer","pemilik"}
+local adminKeywords = {"admin","penjaga","moderator","staff","superadmin","headadmin","coadmin"}
+
+local running = false
+
+-- Function deteksi Title
+local function isOwner(player)
+    local title = player:FindFirstChild("Title")
+    if title and title:IsA("StringValue") then
+        local text = title.Value:lower()
+        for _, keyword in ipairs(ownerKeywords) do
+            if text:find(keyword) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function isAdmin(player)
+    local title = player:FindFirstChild("Title")
+    if title and title:IsA("StringValue") then
+        local text = title.Value:lower()
+        for _, keyword in ipairs(adminKeywords) do
+            if text:find(keyword) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Update count
+local function updateCounts()
+    local owners = 0
+    local admins = 0
+    for _, plr in pairs(Players:GetPlayers()) do
+        if isOwner(plr) then
+            owners += 1
+        elseif isAdmin(plr) then
+            admins += 1
+        end
+    end
+    OwnerLabel.Text = "Owner : "..owners
+    AdminLabel.Text = "Admin : "..admins
+end
+
+-- Start deteksi
+StartBtn.MouseButton1Click:Connect(function()
+    running = true
+    StartBtn.Visible = false
+end)
+
+-- Close / hide
+CloseBtn.MouseButton1Click:Connect(function()
+    Main.Visible = false
+    FloatBtn.Visible = true
+end)
+
+FloatBtn.MouseButton1Click:Connect(function()
+    Main.Visible = true
+    FloatBtn.Visible = false
+end)
+
+-- Loop deteksi realtime
+RunService.Heartbeat:Connect(function()
+    if running then
+        updateCounts()
+    end
+end)
