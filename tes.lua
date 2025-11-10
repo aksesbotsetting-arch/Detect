@@ -16,7 +16,6 @@ local states = {
     speedBoost = false,
     jumpBoost = false,
     lockPlayer = false,
-    shiftLock = false,
     floor3d = false
 }
 
@@ -25,8 +24,9 @@ local originalJumpPower = 50
 local originalFOV = 70
 local lockedTarget = nil
 local floor3dConnection = nil
-local shiftLockConnection = nil
 local lockPlayerConnection = nil
+local pvpBlurEffect = nil
+local pvpVignetteEffect = nil
 
 -- Create GUI
 local ScreenGui = Instance.new("ScreenGui")
@@ -45,7 +45,7 @@ end
 -- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 200, 0, 350)
+MainFrame.Size = UDim2.new(0, 200, 0, 300)
 MainFrame.Position = UDim2.new(0.5, -100, 0.05, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 MainFrame.BackgroundTransparency = 0.3
@@ -110,8 +110,7 @@ local PvPModeBtn = createButton("PvP Mode", 1)
 local SpeedBoostBtn = createButton("Speed Boost", 2)
 local JumpBoostBtn = createButton("Jump Boost", 3)
 local LockPlayerBtn = createButton("Lock Player", 4)
-local ShiftLockBtn = createButton("Shift Lock", 5)
-local Floor3DBtn = createButton("3D Floor", 6)
+local Floor3DBtn = createButton("3D Floor", 5)
 
 -- Toggle function
 local function toggleButton(button, state)
@@ -122,16 +121,64 @@ local function toggleButton(button, state)
     end
 end
 
--- PvP Mode Function
+-- PvP Mode Function with Zoom Effect
 local function togglePvPMode()
     states.pvpMode = not states.pvpMode
     toggleButton(PvPModeBtn, states.pvpMode)
     
     local camera = workspace.CurrentCamera
+    
     if states.pvpMode then
+        -- Change FOV untuk zoom effect
         camera.FieldOfView = 90
+        
+        -- Create Vignette Effect (efek gelap di pinggir)
+        if not pvpVignetteEffect then
+            pvpVignetteEffect = Instance.new("ScreenGui")
+            pvpVignetteEffect.Name = "PvPVignette"
+            pvpVignetteEffect.IgnoreGuiInset = true
+            pvpVignetteEffect.ResetOnSpawn = false
+            
+            local vignetteFrame = Instance.new("ImageLabel")
+            vignetteFrame.Size = UDim2.new(1, 0, 1, 0)
+            vignetteFrame.Position = UDim2.new(0, 0, 0, 0)
+            vignetteFrame.BackgroundTransparency = 1
+            vignetteFrame.Image = "rbxasset://textures/ui/VignetteOverlay.png"
+            vignetteFrame.ImageColor3 = Color3.fromRGB(0, 0, 0)
+            vignetteFrame.ImageTransparency = 0.3
+            vignetteFrame.ScaleType = Enum.ScaleType.Slice
+            vignetteFrame.SliceCenter = Rect.new(0, 0, 0, 0)
+            vignetteFrame.Parent = pvpVignetteEffect
+            
+            pcall(function()
+                pvpVignetteEffect.Parent = game:GetService("CoreGui")
+            end)
+            if pvpVignetteEffect.Parent ~= game:GetService("CoreGui") then
+                pvpVignetteEffect.Parent = player:WaitForChild("PlayerGui")
+            end
+        end
+        
+        -- Create Motion Blur Effect
+        if not camera:FindFirstChild("PvPBlur") then
+            local blur = Instance.new("BlurEffect")
+            blur.Name = "PvPBlur"
+            blur.Size = 3
+            blur.Parent = camera
+        end
+        
     else
+        -- Remove effects
         camera.FieldOfView = originalFOV
+        
+        if pvpVignetteEffect then
+            pvpVignetteEffect:Destroy()
+            pvpVignetteEffect = nil
+        end
+        
+        local blur = camera:FindFirstChild("PvPBlur")
+        if blur then
+            blur:Destroy()
+        end
     end
 end
 
@@ -215,63 +262,71 @@ local function toggleLockPlayer()
     end
 end
 
--- Shift Lock Function
-local function toggleShiftLock()
-    states.shiftLock = not states.shiftLock
-    toggleButton(ShiftLockBtn, states.shiftLock)
-    
-    if states.shiftLock then
-        player.CameraMode = Enum.CameraMode.LockFirstPerson
-        wait(0.1)
-        player.CameraMode = Enum.CameraMode.Classic
-        
-        shiftLockConnection = RunService.RenderStepped:Connect(function()
-            local camera = workspace.CurrentCamera
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart then
-                humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position, humanoidRootPart.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
-            end
-        end)
-    else
-        if shiftLockConnection then
-            shiftLockConnection:Disconnect()
-            shiftLockConnection = nil
-        end
-    end
-end
-
--- 3D Floor Function
-local activeParts = {}
+-- 3D Floor Function (Platform yang bikin terbang)
+local floorPart = nil
 
 local function toggle3DFloor()
     states.floor3d = not states.floor3d
     toggleButton(Floor3DBtn, states.floor3d)
     
     if states.floor3d then
+        -- Create persistent platform
+        floorPart = Instance.new("Part")
+        floorPart.Name = "FloatingPlatform"
+        floorPart.Size = Vector3.new(6, 0.5, 6)
+        floorPart.Anchored = true
+        floorPart.CanCollide = true
+        floorPart.Transparency = 0.3
+        floorPart.Material = Enum.Material.Neon
+        floorPart.BrickColor = BrickColor.new("Lime green")
+        floorPart.TopSurface = Enum.SurfaceType.Smooth
+        floorPart.BottomSurface = Enum.SurfaceType.Smooth
+        floorPart.Parent = workspace
+        
+        -- Trail parts for visual effect
+        local trailParts = {}
+        
         floor3dConnection = RunService.Heartbeat:Connect(function()
-            -- Remove old parts
-            for _, part in pairs(activeParts) do
-                if part and part.Parent then
-                    part:Destroy()
+            if floorPart and rootPart then
+                -- Update platform position (di bawah player)
+                local targetPos = rootPart.Position - Vector3.new(0, 3.5, 0)
+                floorPart.Position = targetPos
+                
+                -- Create trail effect
+                local trailPart = Instance.new("Part")
+                trailPart.Size = Vector3.new(6, 0.5, 6)
+                trailPart.Position = targetPos
+                trailPart.Anchored = true
+                trailPart.CanCollide = false
+                trailPart.Transparency = 0.5
+                trailPart.Material = Enum.Material.Neon
+                trailPart.BrickColor = BrickColor.new("Lime green")
+                trailPart.Parent = workspace
+                
+                table.insert(trailParts, trailPart)
+                
+                -- Fade out trail
+                spawn(function()
+                    wait(0.1)
+                    for i = 1, 10 do
+                        if trailPart and trailPart.Parent then
+                            trailPart.Transparency = trailPart.Transparency + 0.05
+                            wait(0.05)
+                        end
+                    end
+                    if trailPart and trailPart.Parent then
+                        trailPart:Destroy()
+                    end
+                end)
+                
+                -- Clean up old trails
+                if #trailParts > 20 then
+                    local oldPart = table.remove(trailParts, 1)
+                    if oldPart and oldPart.Parent then
+                        oldPart:Destroy()
+                    end
                 end
             end
-            activeParts = {}
-            
-            -- Create new part
-            local floorPart = Instance.new("Part")
-            floorPart.Size = Vector3.new(4, 0.5, 4)
-            floorPart.Position = rootPart.Position - Vector3.new(0, 3, 0)
-            floorPart.Anchored = true
-            floorPart.CanCollide = false
-            floorPart.Transparency = 0.5
-            floorPart.Material = Enum.Material.Neon
-            floorPart.BrickColor = BrickColor.new("Lime green")
-            floorPart.Parent = workspace
-            
-            table.insert(activeParts, floorPart)
-            
-            -- Auto remove after 0.5 seconds
-            game:GetService("Debris"):AddItem(floorPart, 0.5)
         end)
     else
         if floor3dConnection then
@@ -279,12 +334,17 @@ local function toggle3DFloor()
             floor3dConnection = nil
         end
         
-        for _, part in pairs(activeParts) do
-            if part and part.Parent then
+        if floorPart then
+            floorPart:Destroy()
+            floorPart = nil
+        end
+        
+        -- Clean up all trail parts
+        for _, part in pairs(workspace:GetChildren()) do
+            if part:IsA("Part") and part.BrickColor == BrickColor.new("Lime green") and part.Material == Enum.Material.Neon then
                 part:Destroy()
             end
         end
-        activeParts = {}
     end
 end
 
@@ -293,7 +353,6 @@ PvPModeBtn.MouseButton1Click:Connect(togglePvPMode)
 SpeedBoostBtn.MouseButton1Click:Connect(toggleSpeedBoost)
 JumpBoostBtn.MouseButton1Click:Connect(toggleJumpBoost)
 LockPlayerBtn.MouseButton1Click:Connect(toggleLockPlayer)
-ShiftLockBtn.MouseButton1Click:Connect(toggleShiftLock)
 Floor3DBtn.MouseButton1Click:Connect(toggle3DFloor)
 
 -- Character Reset Handler
@@ -312,13 +371,21 @@ player.CharacterAdded:Connect(function(char)
     toggleButton(SpeedBoostBtn, false)
     toggleButton(JumpBoostBtn, false)
     toggleButton(LockPlayerBtn, false)
-    toggleButton(ShiftLockBtn, false)
     toggleButton(Floor3DBtn, false)
     
     -- Disconnect connections
     if lockPlayerConnection then lockPlayerConnection:Disconnect() end
-    if shiftLockConnection then shiftLockConnection:Disconnect() end
     if floor3dConnection then floor3dConnection:Disconnect() end
+    
+    -- Remove PvP effects
+    if pvpVignetteEffect then
+        pvpVignetteEffect:Destroy()
+        pvpVignetteEffect = nil
+    end
+    
+    local camera = workspace.CurrentCamera
+    local blur = camera:FindFirstChild("PvPBlur")
+    if blur then blur:Destroy() end
 end)
 
 print("SabScript loaded successfully!")
