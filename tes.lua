@@ -27,6 +27,8 @@ local IsTeleporting = false
 local NoClipConnection = nil
 local AntiRollbackConnection = nil
 local PositionLockConnection = nil
+local PlayerMoving = false
+local MoveCheckConnection = nil
 
 -- ==================== ADVANCED ANTI-ROLLBACK SYSTEM ====================
 
@@ -61,12 +63,36 @@ local function DisableNoClip()
 end
 
 -- POSITION LOCK - Kunci posisi supaya gak balik (PALING PENTING!)
+local PlayerMoving = false
+local MoveCheckConnection = nil
+
 local function LockPosition(targetPos)
     -- Disconnect old lock
     if PositionLockConnection then
         PositionLockConnection:Disconnect()
         PositionLockConnection = nil
     end
+    
+    PlayerMoving = false
+    
+    -- Detect player movement (keyboard/touch input)
+    if MoveCheckConnection then
+        MoveCheckConnection:Disconnect()
+    end
+    
+    MoveCheckConnection = RunService.Heartbeat:Connect(function()
+        if Humanoid then
+            -- Cek kalau player lagi jalan (velocity atau moveDirection)
+            local moveDir = Humanoid.MoveDirection.Magnitude
+            local velocity = HumanoidRootPart.Velocity.Magnitude
+            
+            if moveDir > 0.1 or velocity > 5 then
+                PlayerMoving = true
+                -- Player mulai gerak, unlock position!
+                UnlockPosition()
+            end
+        end
+    end)
     
     -- Lock position dengan RunService (update setiap frame!)
     PositionLockConnection = RunService.Heartbeat:Connect(function()
@@ -75,6 +101,12 @@ local function LockPosition(targetPos)
                 PositionLockConnection:Disconnect()
                 PositionLockConnection = nil
             end
+            return
+        end
+        
+        -- STOP lock kalau player mulai gerak
+        if PlayerMoving then
+            UnlockPosition()
             return
         end
         
@@ -97,6 +129,13 @@ local function UnlockPosition()
         PositionLockConnection:Disconnect()
         PositionLockConnection = nil
     end
+    
+    if MoveCheckConnection then
+        MoveCheckConnection:Disconnect()
+        MoveCheckConnection = nil
+    end
+    
+    PlayerMoving = false
 end
 
 -- ANTI-ROLLBACK: Anchor Method (Metode paling kuat!)
@@ -450,7 +489,7 @@ local TipsText = Instance.new("TextLabel")
 TipsText.Size = UDim2.new(1, -10, 1, -10)
 TipsText.Position = UDim2.new(0, 5, 0, 5)
 TipsText.BackgroundTransparency = 1
-TipsText.Text = "💡 Position locked 2 sec\nafter teleport to prevent\nrollback!"
+TipsText.Text = "💡 Position locked until you\nmove! Start walking to\nunlock automatically."
 TipsText.TextColor3 = Color3.fromRGB(255, 255, 255)
 TipsText.TextSize = 9
 TipsText.Font = Enum.Font.Gotham
@@ -536,8 +575,13 @@ spawn(function()
             StatusLabel.Text = "Status: Teleporting..."
             StatusLabel.TextColor3 = Color3.fromRGB(255, 140, 0)
         elseif PositionLockConnection then
-            StatusLabel.Text = "Status: Position Locked"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+            if PlayerMoving then
+                StatusLabel.Text = "Status: Unlocking..."
+                StatusLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+            else
+                StatusLabel.Text = "Status: Locked (Move to unlock)"
+                StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+            end
         else
             StatusLabel.Text = "Status: Ready"
             StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
