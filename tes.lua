@@ -1,351 +1,324 @@
--- Roblox Teleport & Anti-Hit System
--- Creator: NazamOfficial
+
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
 
--- Variables
-local SavedPosition = nil
-local AntiHitEnabled = false
-local TeleportInProgress = false
-local Connections = {}
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Create ScreenGui
+-- State variables
+local states = {
+    pvpMode = false,
+    speedBoost = false,
+    jumpBoost = false,
+    lockPlayer = false,
+    shiftLock = false,
+    floor3d = false
+}
+
+local originalWalkSpeed = 16
+local originalJumpPower = 50
+local originalFOV = 70
+local lockedTarget = nil
+local floor3dConnection = nil
+local shiftLockConnection = nil
+local lockPlayerConnection = nil
+
+-- Create GUI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "TeleportAntiHitGUI"
+ScreenGui.Name = "SabScriptGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Create Main Frame
+-- Protection
+pcall(function()
+    ScreenGui.Parent = game:GetService("CoreGui")
+end)
+if ScreenGui.Parent ~= game:GetService("CoreGui") then
+    ScreenGui.Parent = player:WaitForChild("PlayerGui")
+end
+
+-- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 300, 0, 240)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -120)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Size = UDim2.new(0, 200, 0, 350)
+MainFrame.Position = UDim2.new(0.5, -100, 0.05, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+MainFrame.BackgroundTransparency = 0.3
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
-MainCorner.Parent = MainFrame
+-- Corner
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = MainFrame
 
--- Create Header
-local Header = Instance.new("Frame")
-Header.Name = "Header"
-Header.Size = UDim2.new(1, 0, 0, 45)
-Header.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Header.BorderSizePixel = 0
-Header.Parent = MainFrame
-
-local HeaderCorner = Instance.new("UICorner")
-HeaderCorner.CornerRadius = UDim.new(0, 10)
-HeaderCorner.Parent = Header
-
-local HeaderFix = Instance.new("Frame")
-HeaderFix.Size = UDim2.new(1, 0, 0, 10)
-HeaderFix.Position = UDim2.new(0, 0, 1, -10)
-HeaderFix.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-HeaderFix.BorderSizePixel = 0
-HeaderFix.Parent = Header
-
+-- Title
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(1, -50, 1, 0)
-Title.Position = UDim2.new(0, 15, 0, 0)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "NazamOfficial"
+Title.Text = "SabScript"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 18
+Title.TextSize = 20
 Title.Font = Enum.Font.GothamBold
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Header
+Title.Parent = MainFrame
 
--- Close Button
-local CloseButton = Instance.new("TextButton")
-CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 35, 0, 35)
-CloseButton.Position = UDim2.new(1, -40, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.fromRGB(255, 80, 80)
-CloseButton.TextSize = 20
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.BorderSizePixel = 0
-CloseButton.Parent = Header
+-- Buttons Container
+local ButtonsContainer = Instance.new("Frame")
+ButtonsContainer.Name = "ButtonsContainer"
+ButtonsContainer.Size = UDim2.new(1, -20, 1, -50)
+ButtonsContainer.Position = UDim2.new(0, 10, 0, 45)
+ButtonsContainer.BackgroundTransparency = 1
+ButtonsContainer.Parent = MainFrame
 
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseButton
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ButtonsContainer
 
--- Creator Label
-local CreatorLabel = Instance.new("TextLabel")
-CreatorLabel.Name = "CreatorLabel"
-CreatorLabel.Size = UDim2.new(1, -30, 0, 25)
-CreatorLabel.Position = UDim2.new(0, 15, 0, 50)
-CreatorLabel.BackgroundTransparency = 1
-CreatorLabel.Text = "Creator: NazamOfficial"
-CreatorLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-CreatorLabel.TextSize = 13
-CreatorLabel.Font = Enum.Font.Gotham
-CreatorLabel.TextXAlignment = Enum.TextXAlignment.Left
-CreatorLabel.Parent = MainFrame
-
--- Notification Label
-local NotificationLabel = Instance.new("TextLabel")
-NotificationLabel.Name = "NotificationLabel"
-NotificationLabel.Size = UDim2.new(1, -30, 0, 25)
-NotificationLabel.Position = UDim2.new(0, 15, 0, 80)
-NotificationLabel.BackgroundTransparency = 1
-NotificationLabel.Text = ""
-NotificationLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-NotificationLabel.TextSize = 14
-NotificationLabel.Font = Enum.Font.GothamSemibold
-NotificationLabel.TextXAlignment = Enum.TextXAlignment.Center
-NotificationLabel.Parent = MainFrame
-
--- Function to show notification
-local function ShowNotification(text, duration)
-    NotificationLabel.Text = text
-    NotificationLabel.TextTransparency = 0
-    task.wait(duration or 2)
-    local tween = TweenService:Create(NotificationLabel, TweenInfo.new(0.5), {TextTransparency = 1})
-    tween:Play()
-end
-
--- Button Creator Function
-local function CreateButton(name, text, position, parent)
+-- Function to create buttons
+local function createButton(name, layoutOrder)
     local button = Instance.new("TextButton")
     button.Name = name
-    button.Size = UDim2.new(1, -30, 0, 40)
-    button.Position = position
-    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    button.Text = text
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextSize = 15
-    button.Font = Enum.Font.GothamSemibold
+    button.Size = UDim2.new(1, 0, 0, 45)
+    button.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
     button.BorderSizePixel = 0
-    button.Parent = parent
+    button.Text = name
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 16
+    button.Font = Enum.Font.GothamSemibold
+    button.LayoutOrder = layoutOrder
+    button.Parent = ButtonsContainer
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = button
     
-    -- Hover effect
-    button.MouseEnter:Connect(function()
-        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
-    end)
-    
-    button.MouseLeave:Connect(function()
-        local baseColor = Color3.fromRGB(45, 45, 45)
-        if button.Name == "AntiHitButton" and AntiHitEnabled then
-            baseColor = Color3.fromRGB(60, 150, 60)
-        end
-        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = baseColor}):Play()
-    end)
-    
     return button
 end
 
--- Create Buttons
-local SetPosButton = CreateButton("SetPosButton", "Set Position", UDim2.new(0, 15, 0, 110), MainFrame)
-local TeleportButton = CreateButton("TeleportButton", "Teleport to Position", UDim2.new(0, 15, 0, 160), MainFrame)
-local AntiHitButton = CreateButton("AntiHitButton", "Anti-Hit: OFF", UDim2.new(0, 15, 0, 210), MainFrame)
+-- Create all buttons
+local PvPModeBtn = createButton("PvP Mode", 1)
+local SpeedBoostBtn = createButton("Speed Boost", 2)
+local JumpBoostBtn = createButton("Jump Boost", 3)
+local LockPlayerBtn = createButton("Lock Player", 4)
+local ShiftLockBtn = createButton("Shift Lock", 5)
+local Floor3DBtn = createButton("3D Floor", 6)
 
--- Mini Icon Frame (collapsed state)
-local MiniIcon = Instance.new("Frame")
-MiniIcon.Name = "MiniIcon"
-MiniIcon.Size = UDim2.new(0, 65, 0, 65)
-MiniIcon.Position = UDim2.new(0, 20, 0, 20)
-MiniIcon.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MiniIcon.BorderSizePixel = 0
-MiniIcon.Visible = false
-MiniIcon.Active = true
-MiniIcon.Draggable = true
-MiniIcon.Parent = ScreenGui
-
-local MiniCorner = Instance.new("UICorner")
-MiniCorner.CornerRadius = UDim.new(0, 12)
-MiniCorner.Parent = MiniIcon
-
-local MiniButton = Instance.new("TextButton")
-MiniButton.Size = UDim2.new(1, 0, 1, 0)
-MiniButton.BackgroundTransparency = 1
-MiniButton.Text = "⚙️"
-MiniButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MiniButton.TextSize = 32
-MiniButton.Font = Enum.Font.GothamBold
-MiniButton.Parent = MiniIcon
-
--- Toggle GUI function
-local function ToggleGUI()
-    if MainFrame.Visible then
-        MainFrame.Visible = false
-        MiniIcon.Visible = true
+-- Toggle function
+local function toggleButton(button, state)
+    if state then
+        button.BackgroundColor3 = Color3.fromRGB(0, 139, 0)
     else
-        MainFrame.Visible = true
-        MiniIcon.Visible = false
+        button.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
     end
 end
 
-CloseButton.MouseButton1Click:Connect(ToggleGUI)
-MiniButton.MouseButton1Click:Connect(ToggleGUI)
-
--- Set Position Button
-SetPosButton.MouseButton1Click:Connect(function()
-    if Character and HumanoidRootPart then
-        SavedPosition = HumanoidRootPart.CFrame
-        ShowNotification("✓ Position Saved Successfully!", 2)
+-- PvP Mode Function
+local function togglePvPMode()
+    states.pvpMode = not states.pvpMode
+    toggleButton(PvPModeBtn, states.pvpMode)
+    
+    local camera = workspace.CurrentCamera
+    if states.pvpMode then
+        camera.FieldOfView = 90
     else
-        ShowNotification("✗ Error: Character not found!", 2)
+        camera.FieldOfView = originalFOV
     end
-end)
-
--- Improved Teleport Function
-local function TeleportToPosition()
-    if not SavedPosition then
-        ShowNotification("✗ No saved position!", 2)
-        return
-    end
-    
-    if not Character or not HumanoidRootPart or not Humanoid then
-        ShowNotification("✗ Error: Character not found!", 2)
-        return
-    end
-    
-    if TeleportInProgress then
-        return
-    end
-    
-    TeleportInProgress = true
-    
-    -- Disable anti-hit temporarily during teleport
-    local wasAntiHitEnabled = AntiHitEnabled
-    if AntiHitEnabled then
-        AntiHitEnabled = false
-    end
-    
-    -- Save the target position
-    local targetCFrame = SavedPosition
-    
-    -- Method 1: Direct teleport with PivotTo
-    if Character.PrimaryPart then
-        Character:PivotTo(targetCFrame)
-    end
-    
-    -- Method 2: Direct CFrame set
-    HumanoidRootPart.CFrame = targetCFrame
-    
-    -- Method 3: Reset velocity and anchoring
-    HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    
-    -- Anchor briefly to prevent snapback
-    local originalAnchored = HumanoidRootPart.Anchored
-    HumanoidRootPart.Anchored = true
-    
-    task.wait(0.1)
-    
-    -- Final position set
-    HumanoidRootPart.CFrame = targetCFrame
-    HumanoidRootPart.Anchored = originalAnchored
-    
-    -- Re-enable anti-hit if it was enabled
-    if wasAntiHitEnabled then
-        task.wait(0.1)
-        AntiHitEnabled = true
-    end
-    
-    ShowNotification("✓ Teleported Successfully!", 2)
-    
-    task.wait(0.2)
-    TeleportInProgress = false
 end
 
--- Teleport Button
-TeleportButton.MouseButton1Click:Connect(TeleportToPosition)
-
--- Anti-Hit System
-local function EnableAntiHit()
-    if not Character or not HumanoidRootPart then return end
+-- Speed Boost Function
+local function toggleSpeedBoost()
+    states.speedBoost = not states.speedBoost
+    toggleButton(SpeedBoostBtn, states.speedBoost)
     
-    -- Prevent velocity changes
-    if Connections.VelocityReset then
-        Connections.VelocityReset:Disconnect()
+    if states.speedBoost then
+        humanoid.WalkSpeed = 18
+    else
+        humanoid.WalkSpeed = originalWalkSpeed
     end
+end
+
+-- Jump Boost Function
+local function toggleJumpBoost()
+    states.jumpBoost = not states.jumpBoost
+    toggleButton(JumpBoostBtn, states.jumpBoost)
     
-    Connections.VelocityReset = RunService.Heartbeat:Connect(function()
-        if Character and HumanoidRootPart and AntiHitEnabled and not TeleportInProgress then
-            -- Reset velocity to prevent knockback
-            local velocity = HumanoidRootPart.AssemblyLinearVelocity
-            if velocity.Magnitude > 60 or math.abs(velocity.Y) > 50 then
-                HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(
-                    math.clamp(velocity.X, -20, 20),
-                    math.clamp(velocity.Y, -20, 20),
-                    math.clamp(velocity.Z, -20, 20)
-                )
-            end
+    if states.jumpBoost then
+        if humanoid.UseJumpPower then
+            humanoid.JumpPower = originalJumpPower + 10
+        else
+            humanoid.JumpHeight = 7.2 + 1
         end
-    end)
-end
-
-local function DisableAntiHit()
-    if Connections.VelocityReset then
-        Connections.VelocityReset:Disconnect()
-        Connections.VelocityReset = nil
-    end
-end
-
--- Anti-Hit Button
-AntiHitButton.MouseButton1Click:Connect(function()
-    AntiHitEnabled = not AntiHitEnabled
-    
-    if AntiHitEnabled then
-        AntiHitButton.Text = "Anti-Hit: ON"
-        AntiHitButton.BackgroundColor3 = Color3.fromRGB(60, 150, 60)
-        EnableAntiHit()
-        ShowNotification("✓ Anti-Hit Enabled!", 2)
     else
-        AntiHitButton.Text = "Anti-Hit: OFF"
-        AntiHitButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-        DisableAntiHit()
-        ShowNotification("✗ Anti-Hit Disabled!", 2)
+        if humanoid.UseJumpPower then
+            humanoid.JumpPower = originalJumpPower
+        else
+            humanoid.JumpHeight = 7.2
+        end
     end
-end)
+end
 
--- Character respawn handler
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    Character = newCharacter
-    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-    Humanoid = Character:WaitForChild("Humanoid")
+-- Lock Player Function
+local function findNearestPlayer()
+    local nearestPlayer = nil
+    local shortestDistance = 30
     
-    -- Reset teleport flag
-    TeleportInProgress = false
-    
-    if AntiHitEnabled then
-        task.wait(1)
-        EnableAntiHit()
-    end
-end)
-
--- Cleanup on script removal
-ScreenGui.AncestryChanged:Connect(function(_, parent)
-    if not parent then
-        DisableAntiHit()
-        for _, connection in pairs(Connections) do
-            if connection then
-                connection:Disconnect()
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            local otherRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local otherHumanoid = otherPlayer.Character:FindFirstChild("Humanoid")
+            
+            if otherRoot and otherHumanoid and otherHumanoid.Health > 0 then
+                local distance = (rootPart.Position - otherRoot.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestPlayer = otherPlayer
+                end
             end
         end
     end
+    
+    return nearestPlayer
+end
+
+local function toggleLockPlayer()
+    states.lockPlayer = not states.lockPlayer
+    toggleButton(LockPlayerBtn, states.lockPlayer)
+    
+    if states.lockPlayer then
+        lockPlayerConnection = RunService.Heartbeat:Connect(function()
+            local target = findNearestPlayer()
+            if target and target.Character then
+                local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+                if targetRoot then
+                    lockedTarget = targetRoot
+                    local lookVector = (targetRoot.Position - rootPart.Position).Unit
+                    rootPart.CFrame = CFrame.new(rootPart.Position, rootPart.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
+                end
+            end
+        end)
+    else
+        if lockPlayerConnection then
+            lockPlayerConnection:Disconnect()
+            lockPlayerConnection = nil
+        end
+        lockedTarget = nil
+    end
+end
+
+-- Shift Lock Function
+local function toggleShiftLock()
+    states.shiftLock = not states.shiftLock
+    toggleButton(ShiftLockBtn, states.shiftLock)
+    
+    if states.shiftLock then
+        player.CameraMode = Enum.CameraMode.LockFirstPerson
+        wait(0.1)
+        player.CameraMode = Enum.CameraMode.Classic
+        
+        shiftLockConnection = RunService.RenderStepped:Connect(function()
+            local camera = workspace.CurrentCamera
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position, humanoidRootPart.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
+            end
+        end)
+    else
+        if shiftLockConnection then
+            shiftLockConnection:Disconnect()
+            shiftLockConnection = nil
+        end
+    end
+end
+
+-- 3D Floor Function
+local activeParts = {}
+
+local function toggle3DFloor()
+    states.floor3d = not states.floor3d
+    toggleButton(Floor3DBtn, states.floor3d)
+    
+    if states.floor3d then
+        floor3dConnection = RunService.Heartbeat:Connect(function()
+            -- Remove old parts
+            for _, part in pairs(activeParts) do
+                if part and part.Parent then
+                    part:Destroy()
+                end
+            end
+            activeParts = {}
+            
+            -- Create new part
+            local floorPart = Instance.new("Part")
+            floorPart.Size = Vector3.new(4, 0.5, 4)
+            floorPart.Position = rootPart.Position - Vector3.new(0, 3, 0)
+            floorPart.Anchored = true
+            floorPart.CanCollide = false
+            floorPart.Transparency = 0.5
+            floorPart.Material = Enum.Material.Neon
+            floorPart.BrickColor = BrickColor.new("Lime green")
+            floorPart.Parent = workspace
+            
+            table.insert(activeParts, floorPart)
+            
+            -- Auto remove after 0.5 seconds
+            game:GetService("Debris"):AddItem(floorPart, 0.5)
+        end)
+    else
+        if floor3dConnection then
+            floor3dConnection:Disconnect()
+            floor3dConnection = nil
+        end
+        
+        for _, part in pairs(activeParts) do
+            if part and part.Parent then
+                part:Destroy()
+            end
+        end
+        activeParts = {}
+    end
+end
+
+-- Button Connections
+PvPModeBtn.MouseButton1Click:Connect(togglePvPMode)
+SpeedBoostBtn.MouseButton1Click:Connect(toggleSpeedBoost)
+JumpBoostBtn.MouseButton1Click:Connect(toggleJumpBoost)
+LockPlayerBtn.MouseButton1Click:Connect(toggleLockPlayer)
+ShiftLockBtn.MouseButton1Click:Connect(toggleShiftLock)
+Floor3DBtn.MouseButton1Click:Connect(toggle3DFloor)
+
+-- Character Reset Handler
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
+    
+    -- Reset all states
+    for key, _ in pairs(states) do
+        states[key] = false
+    end
+    
+    -- Update button colors
+    toggleButton(PvPModeBtn, false)
+    toggleButton(SpeedBoostBtn, false)
+    toggleButton(JumpBoostBtn, false)
+    toggleButton(LockPlayerBtn, false)
+    toggleButton(ShiftLockBtn, false)
+    toggleButton(Floor3DBtn, false)
+    
+    -- Disconnect connections
+    if lockPlayerConnection then lockPlayerConnection:Disconnect() end
+    if shiftLockConnection then shiftLockConnection:Disconnect() end
+    if floor3dConnection then floor3dConnection:Disconnect() end
 end)
 
--- Initial notification
-ShowNotification("Script Loaded Successfully!", 3)
+print("SabScript loaded successfully!")
