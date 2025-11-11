@@ -1,5 +1,5 @@
--- GHOST MODE v1.0
--- Invisible + Speed Boost - Simple & Powerful
+-- STEALTH MODE v2.0
+-- Mini Size + Speed Boost - Perfect for Stealing Games!
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -21,214 +21,72 @@ if not HumanoidRootPart or not Humanoid then
 end
 
 -- Variables
-local InvisibleActive = false
+local MiniSizeActive = false
 local SpeedBoostActive = false
 local OriginalSpeed = 16
-local InvisibleConnection = nil
+local OriginalSize = nil
 
--- ==================== INVISIBLE SYSTEM ====================
+-- ==================== MINI SIZE SYSTEM ====================
 
-local function EnableInvisible()
-    if InvisibleActive then return end
-    InvisibleActive = true
+local function EnableMiniSize()
+    if MiniSizeActive then return end
+    if not Humanoid then return end
     
-    -- Method 1: Set Transparency untuk CHARACTER parts
-    for _, part in pairs(Character:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("MeshPart") then
-            part.Transparency = 1
-            part.CanCollide = false
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            part.Transparency = 1
-        elseif part:IsA("Accessory") or part:IsA("Hat") then
-            -- Sembunyikan accessories/items
-            for _, child in pairs(part:GetDescendants()) do
-                if child:IsA("BasePart") or child:IsA("MeshPart") then
-                    child.Transparency = 1
-                end
-            end
-        end
+    MiniSizeActive = true
+    
+    -- Simpan size original
+    if not OriginalSize then
+        OriginalSize = {
+            BodyDepthScale = Humanoid.BodyDepthScale.Value,
+            BodyHeightScale = Humanoid.BodyHeightScale.Value,
+            BodyWidthScale = Humanoid.BodyWidthScale.Value,
+            HeadScale = Humanoid.HeadScale.Value
+        }
     end
     
-    -- Sembunyikan face
-    if Character:FindFirstChild("Head") then
-        local head = Character.Head
-        if head:FindFirstChild("face") then
-            head.face.Transparency = 1
-        end
-    end
+    -- Set ke SUPER KECIL (10% dari normal = kayak semut!)
+    local miniScale = 0.1
     
-    -- HumanoidRootPart tetap ada tapi invisible
-    if HumanoidRootPart then
-        HumanoidRootPart.Transparency = 1
-    end
-    
-    -- Continuous invisible (untuk character + ITEMS YANG DIPEGANG!)
-    InvisibleConnection = RunService.Heartbeat:Connect(function()
-        if not InvisibleActive then return end
-        
-        -- Hide CHARACTER parts
-        for _, part in pairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") or part:IsA("MeshPart") then
-                if part.Transparency ~= 1 then
-                    part.Transparency = 1
-                end
-            elseif part:IsA("Decal") or part:IsA("Texture") then
-                if part.Transparency ~= 1 then
-                    part.Transparency = 1
-                end
-            end
-        end
-        
-        -- IMPORTANT: Hide TOOLS/PETS/OBJECTS yang dipegang!
-        -- Cari semua Weld/WeldConstraint yang connect ke character
-        for _, obj in pairs(workspace:GetDescendants()) do
-            local shouldHide = false
-            
-            -- Check 1: Apakah object ini di-weld ke character?
-            if obj:IsA("Weld") or obj:IsA("WeldConstraint") or obj:IsA("Motor6D") then
-                local part0 = obj.Part0
-                local part1 = obj.Part1
-                
-                -- Kalau salah satu part nya adalah bagian dari character
-                if (part0 and part0:IsDescendantOf(Character)) or (part1 and part1:IsDescendantOf(Character)) then
-                    -- Hide object yang terhubung
-                    local targetPart = nil
-                    if part0 and not part0:IsDescendantOf(Character) then
-                        targetPart = part0
-                    elseif part1 and not part1:IsDescendantOf(Character) then
-                        targetPart = part1
-                    end
-                    
-                    if targetPart then
-                        -- Hide part dan semua descendants nya
-                        if targetPart:IsA("BasePart") or targetPart:IsA("MeshPart") then
-                            targetPart.Transparency = 1
-                        end
-                        
-                        -- Hide parent model juga (untuk pets/animals)
-                        local model = targetPart.Parent
-                        if model and model:IsA("Model") then
-                            for _, child in pairs(model:GetDescendants()) do
-                                if child:IsA("BasePart") or child:IsA("MeshPart") then
-                                    child.Transparency = 1
-                                elseif child:IsA("Decal") or child:IsA("Texture") then
-                                    child.Transparency = 1
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            
-            -- Check 2: Object yang di-parent langsung ke character (Tools, etc)
-            if obj.Parent and obj.Parent:IsDescendantOf(Character) then
-                if obj:IsA("BasePart") or obj:IsA("MeshPart") then
-                    obj.Transparency = 1
-                elseif obj:IsA("Model") then
-                    for _, child in pairs(obj:GetDescendants()) do
-                        if child:IsA("BasePart") or child:IsA("MeshPart") then
-                            child.Transparency = 1
-                        elseif child:IsA("Decal") or child:IsA("Texture") then
-                            child.Transparency = 1
-                        end
-                    end
-                end
-            end
-            
-            -- Check 3: Object yang distance nya dekat dengan character (holding)
-            if obj:IsA("Model") and obj ~= Character then
-                local primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                if primaryPart and HumanoidRootPart then
-                    local distance = (primaryPart.Position - HumanoidRootPart.Position).Magnitude
-                    
-                    -- Kalau jarak < 10 studs, kemungkinan besar dipegang
-                    if distance < 10 then
-                        -- Check kalau ada Weld/Constraint ke character
-                        local hasConnection = false
-                        for _, child in pairs(obj:GetDescendants()) do
-                            if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
-                                local p0 = child.Part0
-                                local p1 = child.Part1
-                                if (p0 and p0:IsDescendantOf(Character)) or (p1 and p1:IsDescendantOf(Character)) then
-                                    hasConnection = true
-                                    break
-                                end
-                            end
-                        end
-                        
-                        if hasConnection then
-                            -- Hide seluruh model
-                            for _, part in pairs(obj:GetDescendants()) do
-                                if part:IsA("BasePart") or part:IsA("MeshPart") then
-                                    part.Transparency = 1
-                                elseif part:IsA("Decal") or part:IsA("Texture") then
-                                    part.Transparency = 1
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    pcall(function()
+        Humanoid.BodyDepthScale.Value = miniScale
+        Humanoid.BodyHeightScale.Value = miniScale
+        Humanoid.BodyWidthScale.Value = miniScale
+        Humanoid.HeadScale.Value = miniScale
     end)
+    
+    -- Adjust HipHeight supaya tidak terlalu rendah
+    if Humanoid then
+        Humanoid.HipHeight = Humanoid.HipHeight * miniScale
+    end
 end
 
-local function DisableInvisible()
-    if not InvisibleActive then return end
-    InvisibleActive = false
+local function DisableMiniSize()
+    if not MiniSizeActive then return end
+    if not Humanoid then return end
     
-    -- Disconnect continuous check
-    if InvisibleConnection then
-        InvisibleConnection:Disconnect()
-        InvisibleConnection = nil
+    MiniSizeActive = false
+    
+    -- Restore size original
+    if OriginalSize then
+        pcall(function()
+            Humanoid.BodyDepthScale.Value = OriginalSize.BodyDepthScale
+            Humanoid.BodyHeightScale.Value = OriginalSize.BodyHeightScale
+            Humanoid.BodyWidthScale.Value = OriginalSize.BodyWidthScale
+            Humanoid.HeadScale.Value = OriginalSize.HeadScale
+        end)
+    else
+        -- Default Roblox scale
+        pcall(function()
+            Humanoid.BodyDepthScale.Value = 1
+            Humanoid.BodyHeightScale.Value = 1
+            Humanoid.BodyWidthScale.Value = 1
+            Humanoid.HeadScale.Value = 1
+        end)
     end
     
-    -- Restore visibility for CHARACTER
-    for _, part in pairs(Character:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("MeshPart") then
-            part.Transparency = 0
-            if part.Name ~= "HumanoidRootPart" then
-                part.CanCollide = true
-            end
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            part.Transparency = 0
-        elseif part:IsA("Accessory") or part:IsA("Hat") then
-            for _, child in pairs(part:GetDescendants()) do
-                if child:IsA("BasePart") or child:IsA("MeshPart") then
-                    child.Transparency = 0
-                end
-            end
-        end
-    end
-    
-    -- Restore face
-    if Character:FindFirstChild("Head") then
-        local head = Character.Head
-        if head:FindFirstChild("face") then
-            head.face.Transparency = 0
-        end
-    end
-    
-    -- HumanoidRootPart tetap invisible (default Roblox)
-    if HumanoidRootPart then
-        HumanoidRootPart.Transparency = 1
-    end
-    
-    -- Restore visibility untuk SEMUA OBJECTS di workspace (pets/animals yang dibawa)
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") or obj:IsA("MeshPart") then
-            -- Restore transparency ke default (0)
-            -- KECUALI kalau memang part nya transparan by design
-            if obj.Name ~= "HumanoidRootPart" then
-                pcall(function()
-                    obj.Transparency = 0
-                end)
-            end
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            pcall(function()
-                obj.Transparency = 0
-            end)
-        end
+    -- Reset HipHeight
+    if Humanoid then
+        Humanoid.HipHeight = 0
     end
 end
 
@@ -240,7 +98,7 @@ local function EnableSpeedBoost()
     
     SpeedBoostActive = true
     OriginalSpeed = Humanoid.WalkSpeed
-    Humanoid.WalkSpeed = 20
+    Humanoid.WalkSpeed = 25 -- Speed boost ke 25 (lebih kenceng!)
 end
 
 local function DisableSpeedBoost()
@@ -277,7 +135,7 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST MODE"
+Title.Text = "🐜 STEALTH MODE"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
@@ -346,19 +204,19 @@ local function CreateToggleButton(name, text, position, callback)
     return Button, Status
 end
 
--- INVISIBLE Button
-CreateToggleButton("InvisibleBtn", "INVISIBLE", UDim2.new(0, 0, 0, 0),
+-- MINI SIZE Button
+CreateToggleButton("MiniBtn", "MINI SIZE", UDim2.new(0, 0, 0, 0),
     function(active, btn, status)
         if active then
-            EnableInvisible()
+            EnableMiniSize()
             btn.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
             status.Text = "ON"
-            ShowNotification("👻 Invisible: ON", Color3.fromRGB(0, 255, 0))
+            ShowNotification("🐜 Mini Size: ON", Color3.fromRGB(0, 255, 0))
         else
-            DisableInvisible()
+            DisableMiniSize()
             btn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
             status.Text = "OFF"
-            ShowNotification("👁️ Invisible: OFF", Color3.fromRGB(255, 100, 0))
+            ShowNotification("👤 Normal Size: ON", Color3.fromRGB(255, 100, 0))
         end
     end
 )
@@ -370,7 +228,7 @@ CreateToggleButton("SpeedBtn", "SPEED BOOST", UDim2.new(0, 0, 0, 60),
             EnableSpeedBoost()
             btn.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
             status.Text = "ON"
-            ShowNotification("⚡ Speed: 20", Color3.fromRGB(0, 255, 0))
+            ShowNotification("⚡ Speed: 25", Color3.fromRGB(0, 255, 0))
         else
             DisableSpeedBoost()
             btn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
@@ -382,7 +240,7 @@ CreateToggleButton("SpeedBtn", "SPEED BOOST", UDim2.new(0, 0, 0, 60),
 
 -- Info Panel
 local InfoBox = Instance.new("Frame")
-InfoBox.Size = UDim2.new(1, 0, 0, 120)
+InfoBox.Size = UDim2.new(1, 0, 0, 130)
 InfoBox.Position = UDim2.new(0, 0, 0, 130)
 InfoBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 InfoBox.BackgroundTransparency = 0.5
@@ -405,10 +263,10 @@ InfoTitle.TextXAlignment = Enum.TextXAlignment.Left
 InfoTitle.Parent = InfoBox
 
 local StatusText = Instance.new("TextLabel")
-StatusText.Size = UDim2.new(1, -10, 0, 85)
+StatusText.Size = UDim2.new(1, -10, 0, 95)
 StatusText.Position = UDim2.new(0, 5, 0, 30)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "Invisible: OFF\nSpeed: 16\n\n✓ Hide character\n✓ Hide pets/animals held\n✓ Both work together!"
+StatusText.Text = "Size: Normal\nSpeed: 16\n\n✓ Super small = hard to see\n✓ Fast speed = quick escape\n✓ Perfect for stealing!"
 StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
 StatusText.TextSize = 10
 StatusText.Font = Enum.Font.Gotham
@@ -433,7 +291,7 @@ CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
 CloseButton.MouseButton1Click:Connect(function()
-    DisableInvisible()
+    DisableMiniSize()
     DisableSpeedBoost()
     ScreenGui:Destroy()
 end)
@@ -484,12 +342,12 @@ end
 spawn(function()
     while wait(0.5) do
         if Humanoid then
-            local invisText = InvisibleActive and "ON" or "OFF"
+            local sizeText = MiniSizeActive and "Mini (10%)" or "Normal"
             local speedValue = Humanoid.WalkSpeed
             
             StatusText.Text = string.format(
-                "👻 Invisible: %s\n⚡ Speed: %.0f\n\n✓ Hide character\n✓ Hide pets/animals\n✓ Perfect for stealing!",
-                invisText,
+                "🐜 Size: %s\n⚡ Speed: %.0f\n\n✓ Mini = 90%% smaller!\n✓ Very hard to see\n✓ Perfect combo for steal!",
+                sizeText,
                 speedValue
             )
         end
@@ -503,18 +361,15 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     Humanoid = newChar:WaitForChild("Humanoid", 10)
     
     -- Reset states
-    InvisibleActive = false
+    MiniSizeActive = false
     SpeedBoostActive = false
-    if InvisibleConnection then
-        InvisibleConnection:Disconnect()
-        InvisibleConnection = nil
-    end
+    OriginalSize = nil
 end)
 
 -- Load Notification
 spawn(function()
     wait(0.5)
-    ShowNotification("👻 Ghost Mode Loaded!", Color3.fromRGB(100, 150, 255))
+    ShowNotification("🐜 Stealth Mode Loaded!", Color3.fromRGB(100, 150, 255))
 end)
 
-print("👻 Ghost Mode v1.0 - Invisible + Speed Boost Loaded!")
+print("🐜 Stealth Mode v2.0 - Mini Size + Speed Boost Loaded!")
