@@ -1,4 +1,4 @@
--- STEALTH TELEPORT v4.0
+-- STEALTH TELEPORT v4.0 with MINIMIZE ICON
 -- NoClip OFF after teleport - Bypass anti-NoClip detection!
 
 local Players = game:GetService("Players")
@@ -270,12 +270,12 @@ local function STEALTH_TELEPORT(targetPos)
     wait(0.3)
     
     -- STEP 5: Position lock (with movement detection)
-    SmartPositionLock(targetPos, 5.0) -- Lock 5 seconds or until movement
+    SmartPositionLock(targetPos, 5.0)
     ShowNotification("🔐 Position Locked 5s", Color3.fromRGB(255, 200, 0))
     
     -- STEP 6: Continuous position check (backup)
     spawn(function()
-        for i = 1, 50 do -- 5 seconds (50 x 0.1s)
+        for i = 1, 50 do
             wait(0.1)
             
             if PlayerIsMoving then
@@ -283,11 +283,9 @@ local function STEALTH_TELEPORT(targetPos)
                 break
             end
             
-            -- Check if far from target
             if HumanoidRootPart then
                 local dist = (HumanoidRootPart.Position - targetPos).Magnitude
                 if dist > 5 then
-                    -- Force back if rolled back
                     pcall(function()
                         HumanoidRootPart.CFrame = CFrame.new(targetPos)
                         HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
@@ -296,7 +294,6 @@ local function STEALTH_TELEPORT(targetPos)
             end
         end
         
-        -- After 5 seconds, fully unlock
         if not PlayerIsMoving then
             UnlockPosition()
             ShowNotification("✓ Auto-Unlock Complete!", Color3.fromRGB(0, 255, 0))
@@ -317,6 +314,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer.PlayerGui
 
+-- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 220, 0, 400)
@@ -346,6 +344,51 @@ Container.Size = UDim2.new(1, -20, 1, -55)
 Container.Position = UDim2.new(0, 10, 0, 45)
 Container.BackgroundTransparency = 1
 Container.Parent = MainFrame
+
+-- ==================== MINIMIZE ICON ====================
+
+local MinimizeIcon = Instance.new("ImageButton")
+MinimizeIcon.Name = "MinimizeIcon"
+MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
+MinimizeIcon.Position = UDim2.new(0, 10, 0, 10)
+MinimizeIcon.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+MinimizeIcon.BorderSizePixel = 0
+MinimizeIcon.Active = true
+MinimizeIcon.Draggable = true
+MinimizeIcon.Visible = false
+MinimizeIcon.Parent = ScreenGui
+
+local IconCorner = Instance.new("UICorner")
+IconCorner.CornerRadius = UDim.new(0, 10)
+IconCorner.Parent = MinimizeIcon
+
+local IconText = Instance.new("TextLabel")
+IconText.Size = UDim2.new(1, 0, 1, 0)
+IconText.BackgroundTransparency = 1
+IconText.Text = "🥷"
+IconText.TextColor3 = Color3.fromRGB(255, 255, 255)
+IconText.TextSize = 24
+IconText.Font = Enum.Font.GothamBold
+IconText.Parent = MinimizeIcon
+
+-- Click to open
+MinimizeIcon.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    MinimizeIcon.Visible = false
+end)
+
+-- Hover effect
+MinimizeIcon.MouseEnter:Connect(function()
+    MinimizeIcon.BackgroundColor3 = Color3.fromRGB(130, 180, 255)
+    MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
+end)
+
+MinimizeIcon.MouseLeave:Connect(function()
+    MinimizeIcon.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
+end)
+
+-- ==================== BUTTONS ====================
 
 -- Button Creator
 local function CreateButton(name, text, position, color, callback)
@@ -541,7 +584,7 @@ StealthText.Font = Enum.Font.GothamBold
 StealthText.TextWrapped = true
 StealthText.Parent = StealthBox
 
--- Close Button
+-- Close Button (MINIMIZE)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -35, 0, 5)
@@ -558,9 +601,10 @@ CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
 CloseButton.MouseButton1Click:Connect(function()
-    UnlockPosition()
-    DisableNoClip()
-    ScreenGui:Destroy()
+    -- MINIMIZE (bukan destroy)
+    MainFrame.Visible = false
+    MinimizeIcon.Visible = true
+    ShowNotification("🥷 Menu minimized - Active features running!", Color3.fromRGB(100, 150, 255))
 end)
 
 CloseButton.MouseEnter:Connect(function()
@@ -656,7 +700,7 @@ end)
 -- Load notification
 spawn(function()
     wait(0.5)
-    ShowNotification("🥷 STEALTH TP v4.0 LOADED!\nNoClip OFF after arrival!", Color3.fromRGB(100, 150, 255))
+    ShowNotification("🥷 STEALTH TP v4.0 LOADED!\nClose (X) to minimize menu!", Color3.fromRGB(100, 150, 255))
 end)
 
-print("🥷 STEALTH TELEPORT v4.0 LOADED - Anti-NoClip Detection!")
+print("🥷 STEALTH TELEPORT v4.0 LOADED - With Minimize Icon!")
