@@ -166,17 +166,27 @@ function PlayWalkRecording(recordingName)
             targetPos = recording.positions[currentIndex]
         end
         
-        -- TERAPKAN POSISI TANPA MENGUBAH ORIENTASI (BIAR ANIMASI ALAMI)
-        if targetPos then
-            local currentCFrame = HumanoidRootPart.CFrame
-            -- Simpan rotasi saat ini, hanya ubah posisi
-            HumanoidRootPart.CFrame = CFrame.new(targetPos) * currentCFrame.Rotation
-            
-            -- Jika reverse orientation aktif, balik arah hadap
-            if ReverseOrientation then
-                HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
-            end
-        end
+        
+if targetPos then
+    -- Hapus BodyPosition lama jika ada
+    local oldBodyPosition = HumanoidRootPart:FindFirstChild("WalkRecorderBodyPosition")
+    if oldBodyPosition then
+        oldBodyPosition:Destroy()
+    end
+    
+    -- Buat BodyPosition baru
+    local bodyPosition = Instance.new("BodyPosition")
+    bodyPosition.Name = "WalkRecorderBodyPosition"
+    bodyPosition.Position = targetPos
+    bodyPosition.MaxForce = Vector3.new(4000, 4000, 4000)
+    bodyPosition.P = 10000
+    bodyPosition.Parent = HumanoidRootPart
+    
+    -- Jika reverse orientation aktif
+    if ReverseOrientation then
+        HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+    end
+end
     end)
 end
 
@@ -296,6 +306,8 @@ MinimizeIcon.MouseButton1Click:Connect(function()
     MinimizeIcon.Visible = false
 end)
 
+-- PASTIKAN MainFrame dan MinimizeIcon ada di scope yang sama
+
 MinimizeIcon.MouseEnter:Connect(function()
     MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
 end)
@@ -352,6 +364,10 @@ MinimizeButton.MouseButton1Click:Connect(function()
     MinimizeIcon.Visible = true
     ShowNotification("⚡ Minimized - Auto Walk Recorder Active!", Color3.fromRGB(255, 100, 0))
 end)
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
 
 -- Tombol Utama (Record/Save, Pause/Lanjutkan, Balik Badan/Normal)
 local MainButtonsFrame = Instance.new("Frame")
@@ -604,74 +620,74 @@ local function CreateWalkCPButton(recordingName, recordingData)
     end)
     
     DeleteBtn.MouseButton1Click:Connect(function()
-        -- Buat popup konfirmasi
-        local ConfirmFrame = Instance.new("Frame")
-        ConfirmFrame.Size = UDim2.new(0, 250, 0, 120)
-        ConfirmFrame.Position = UDim2.new(0.5, -125, 0.5, -60)
-        ConfirmFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        ConfirmFrame.BorderSizePixel = 0
-        ConfirmFrame.ZIndex = 10
-        ConfirmFrame.Parent = ScreenGui
-        
-        local ConfirmCorner = Instance.new("UICorner")
-        ConfirmCorner.CornerRadius = UDim.new(0, 10)
-        ConfirmCorner.Parent = ConfirmFrame
-        
-        local ConfirmTitle = Instance.new("TextLabel")
-        ConfirmTitle.Size = UDim2.new(1, -20, 0, 25)
-        ConfirmTitle.Position = UDim2.new(0, 10, 0, 10)
-        ConfirmTitle.BackgroundTransparency = 1
-        ConfirmTitle.Text = "⚠️ Konfirmasi Hapus"
-        ConfirmTitle.TextColor3 = Color3.fromRGB(255, 200, 0)
-        ConfirmTitle.TextSize = 14
-        ConfirmTitle.Font = Enum.Font.GothamBold
-        ConfirmTitle.Parent = ConfirmFrame
-        
-        local ConfirmText = Instance.new("TextLabel")
-        ConfirmText.Size = UDim2.new(1, -20, 0, 40)
-        ConfirmText.Position = UDim2.new(0, 10, 0, 35)
-        ConfirmText.BackgroundTransparency = 1
-        ConfirmText.Text = "Apakah kamu yakin ingin menghapus:\n" .. recordingName .. "?"
-        ConfirmText.TextColor3 = Color3.fromRGB(200, 200, 200)
-        ConfirmText.TextSize = 11
-        ConfirmText.Font = Enum.Font.Gotham
-        ConfirmText.TextWrapped = true
-        ConfirmText.Parent = ConfirmFrame
-        
-        local YesButton = Instance.new("TextButton")
-        YesButton.Size = UDim2.new(0.4, 0, 0, 30)
-        YesButton.Position = UDim2.new(0.1, 0, 0, 80)
-        YesButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-        YesButton.BorderSizePixel = 0
-        YesButton.Text = "✓ YA"
-        YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        YesButton.TextSize = 12
-        YesButton.Font = Enum.Font.GothamBold
-        YesButton.Parent = ConfirmFrame
-        
-        local NoButton = Instance.new("TextButton")
-        NoButton.Size = UDim2.new(0.4, 0, 0, 30)
-        NoButton.Position = UDim2.new(0.5, 0, 0, 80)
-        NoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        NoButton.BorderSizePixel = 0
-        NoButton.Text = "✗ TIDAK"
-        NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        NoButton.TextSize = 12
-        NoButton.Font = Enum.Font.GothamBold
-        NoButton.Parent = ConfirmFrame
-        
-        YesButton.MouseButton1Click:Connect(function()
-            WalkRecordings[recordingName] = nil
-            RefreshWalkCPList()
-            ConfirmFrame:Destroy()
-            ShowNotification("🗑️ Deleted: " .. recordingName, Color3.fromRGB(255, 100, 0))
-        end)
-        
-        NoButton.MouseButton1Click:Connect(function()
-            ConfirmFrame:Destroy()
-            ShowNotification("❌ Delete cancelled", Color3.fromRGB(200, 200, 200))
-        end)
+    -- Buat popup konfirmasi
+    local ConfirmFrame = Instance.new("Frame")
+    ConfirmFrame.Size = UDim2.new(0, 250, 0, 120)
+    ConfirmFrame.Position = UDim2.new(0.5, -125, 0.5, -60)
+    ConfirmFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    ConfirmFrame.BorderSizePixel = 0
+    ConfirmFrame.ZIndex = 10
+    ConfirmFrame.Parent = ScreenGui
+    
+    local ConfirmCorner = Instance.new("UICorner")
+    ConfirmCorner.CornerRadius = UDim.new(0, 10)
+    ConfirmCorner.Parent = ConfirmFrame
+    
+    local ConfirmTitle = Instance.new("TextLabel")
+    ConfirmTitle.Size = UDim2.new(1, -20, 0, 25)
+    ConfirmTitle.Position = UDim2.new(0, 10, 0, 10)
+    ConfirmTitle.BackgroundTransparency = 1
+    ConfirmTitle.Text = "⚠️ Konfirmasi Hapus"
+    ConfirmTitle.TextColor3 = Color3.fromRGB(255, 200, 0)
+    ConfirmTitle.TextSize = 14
+    ConfirmTitle.Font = Enum.Font.GothamBold
+    ConfirmTitle.Parent = ConfirmFrame
+    
+    local ConfirmText = Instance.new("TextLabel")
+    ConfirmText.Size = UDim2.new(1, -20, 0, 40)
+    ConfirmText.Position = UDim2.new(0, 10, 0, 35)
+    ConfirmText.BackgroundTransparency = 1
+    ConfirmText.Text = "Apakah kamu yakin ingin menghapus:\n" .. recordingName .. "?"
+    ConfirmText.TextColor3 = Color3.fromRGB(200, 200, 200)
+    ConfirmText.TextSize = 11
+    ConfirmText.Font = Enum.Font.Gotham
+    ConfirmText.TextWrapped = true
+    ConfirmText.Parent = ConfirmFrame
+    
+    local YesButton = Instance.new("TextButton")
+    YesButton.Size = UDim2.new(0.4, 0, 0, 30)
+    YesButton.Position = UDim2.new(0.1, 0, 0, 80)
+    YesButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    YesButton.BorderSizePixel = 0
+    YesButton.Text = "✓ YA"
+    YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    YesButton.TextSize = 12
+    YesButton.Font = Enum.Font.GothamBold
+    YesButton.Parent = ConfirmFrame
+    
+    local NoButton = Instance.new("TextButton")
+    NoButton.Size = UDim2.new(0.4, 0, 0, 30)
+    NoButton.Position = UDim2.new(0.5, 0, 0, 80)
+    NoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    NoButton.BorderSizePixel = 0
+    NoButton.Text = "✗ TIDAK"
+    NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoButton.TextSize = 12
+    NoButton.Font = Enum.Font.GothamBold
+    NoButton.Parent = ConfirmFrame
+    
+    YesButton.MouseButton1Click:Connect(function()
+        WalkRecordings[recordingName] = nil
+        RefreshWalkCPList()
+        ConfirmFrame:Destroy()
+        ShowNotification("🗑️ Deleted: " .. recordingName, Color3.fromRGB(255, 100, 0))
     end)
+    
+    NoButton.MouseButton1Click:Connect(function()
+        ConfirmFrame:Destroy()
+        ShowNotification("❌ Delete cancelled", Color3.fromRGB(200, 200, 200))
+    end)
+end)
     
     Button.MouseEnter:Connect(function()
         Button.BackgroundColor3 = Color3.fromRGB(255, 120, 20)
@@ -756,7 +772,8 @@ ReverseButton.MouseButton1Click:Connect(function()
         
         -- Balik badan karakter langsung
         if HumanoidRootPart then
-            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+            local currentCF = HumanoidRootPart.CFrame
+            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position - currentCF.LookVector)
         end
     else
         ReverseButton.Text = "🔄 BALIK BADAN"
@@ -766,7 +783,8 @@ ReverseButton.MouseButton1Click:Connect(function()
         
         -- Kembalikan orientasi normal
         if HumanoidRootPart then
-            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+            local currentCF = HumanoidRootPart.CFrame
+            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position + currentCF.LookVector)
         end
     end
 end)
@@ -844,13 +862,6 @@ spawn(function()
         else
             StatusText.Text = "📊 Status: Ready"
             StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
-        end
-        
-        -- Update orientation status
-        if ReverseOrientation then
-            OrientationText.Text = "🧭 Orientation: Reversed"
-        else
-            OrientationText.Text = "🧭 Orientation: Normal"
         end
     end
 end)
