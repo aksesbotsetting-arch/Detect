@@ -1,6 +1,3 @@
--- STEALTH TELEPORT v4.0 with MINIMIZE ICON
--- NoClip OFF after teleport - Bypass anti-NoClip detection!
-
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -22,14 +19,14 @@ if not HumanoidRootPart or not Humanoid then
 end
 
 -- Variables
-local SavedPosition = nil
+local SavedPositions = {} -- NEW: Array untuk menyimpan multiple positions
+local MAX_SAVES = 20 -- Maksimal 20 save slots
 local IsTeleporting = false
 local NoClipConnection = nil
 local PositionLockConnection = nil
 
--- ==================== STEALTH BYPASS METHODS ====================
+-- ==================== V3N0M BYPASS METHODS ====================
 
--- NOCLIP TEMPORARY (Hanya saat teleport!)
 local function EnableNoClip()
     if NoClipConnection then return end
     
@@ -50,18 +47,16 @@ local function DisableNoClip()
         NoClipConnection = nil
     end
     
-    -- Restore collision
     pcall(function()
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                 part.CanCollide = true
             end
         end
-        HumanoidRootPart.CanCollide = false -- HRP tetap false
+        HumanoidRootPart.CanCollide = false
     end)
 end
 
--- NETWORK OWNERSHIP
 local function ClaimNetworkOwnership()
     pcall(function()
         for i = 1, 5 do
@@ -75,7 +70,6 @@ local function ClaimNetworkOwnership()
     end)
 end
 
--- DESTROY CONSTRAINTS
 local function DestroyConstraints()
     pcall(function()
         for _, obj in pairs(HumanoidRootPart:GetChildren()) do
@@ -87,7 +81,6 @@ local function DestroyConstraints()
     end)
 end
 
--- POSITION LOCK (SMART - Detect player movement)
 local PlayerIsMoving = false
 
 local function SmartPositionLock(targetPos, duration)
@@ -107,7 +100,6 @@ local function SmartPositionLock(targetPos, duration)
             return
         end
         
-        -- Check if duration expired
         if tick() - startTime > duration then
             lockActive = false
             if PositionLockConnection then
@@ -117,7 +109,6 @@ local function SmartPositionLock(targetPos, duration)
             return
         end
         
-        -- Detect player movement input
         if Humanoid then
             local moveVector = Humanoid.MoveVector
             if moveVector.Magnitude > 0.1 then
@@ -131,7 +122,6 @@ local function SmartPositionLock(targetPos, duration)
             end
         end
         
-        -- Lock position if not moving
         if lockActive and not PlayerIsMoving then
             local currentPos = HumanoidRootPart.Position
             local distance = (currentPos - targetPos).Magnitude
@@ -156,54 +146,41 @@ local function UnlockPosition()
     end
 end
 
--- ANCHOR METHOD (Short duration)
 local function AnchorTeleport(targetPos, holdTime)
     pcall(function()
-        -- Multiple teleport attempts
         for i = 1, 3 do
             HumanoidRootPart.CFrame = CFrame.new(targetPos)
             wait(0.03)
         end
         
-        -- Anchor to hold position
         HumanoidRootPart.Anchored = true
         HumanoidRootPart.CFrame = CFrame.new(targetPos)
         
         wait(holdTime)
         
-        -- Unanchor
         HumanoidRootPart.Anchored = false
-        
-        -- Clear velocity
         HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
         HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
     end)
 end
 
--- HUMANOID STATE TRICK
 local function HumanoidStateTrick(targetPos)
     pcall(function()
         if not Humanoid then return end
         
-        -- Save original state
         local originalState = Humanoid:GetState()
-        
-        -- Change to physics
         Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
         wait(0.1)
-        
-        -- Teleport
         HumanoidRootPart.CFrame = CFrame.new(targetPos)
         wait(0.2)
-        
-        -- Restore state
         Humanoid:ChangeState(Enum.HumanoidStateType.Landed)
     end)
 end
 
--- ==================== ULTIMATE STEALTH TELEPORT ====================
+BAGIAN 2/4:
+-- ==================== ULTIMATE V3N0M TELEPORT ====================
 
-local function STEALTH_TELEPORT(targetPos)
+local function V3N0M_TELEPORT(targetPos)
     if IsTeleporting then
         return false, "Already teleporting"
     end
@@ -211,32 +188,25 @@ local function STEALTH_TELEPORT(targetPos)
     IsTeleporting = true
     PlayerIsMoving = false
     
-    -- STEP 1: Enable NoClip for travel
     EnableNoClip()
     ShowNotification("🔓 NoClip: ON (Traveling...)", Color3.fromRGB(100, 150, 255))
     
-    -- STEP 2: Preparation
     ClaimNetworkOwnership()
     DestroyConstraints()
-    
     wait(0.1)
     
-    -- STEP 3: Calculate distance and choose method
     local distance = (targetPos - HumanoidRootPart.Position).Magnitude
     
     if distance < 100 then
-        -- SHORT DISTANCE: Direct teleport + anchor
         for i = 1, 3 do
             pcall(function()
                 HumanoidRootPart.CFrame = CFrame.new(targetPos)
             end)
             wait(0.05)
         end
-        
         AnchorTeleport(targetPos, 0.8)
         
     elseif distance < 500 then
-        -- MEDIUM DISTANCE: Step teleport
         local steps = math.ceil(distance / 50)
         local direction = (targetPos - HumanoidRootPart.Position).Unit
         
@@ -251,29 +221,22 @@ local function STEALTH_TELEPORT(targetPos)
             end)
             wait(0.04)
         end
-        
-        -- Final position + anchor
         AnchorTeleport(targetPos, 1.0)
-        
     else
-        -- LONG DISTANCE: Humanoid state trick + anchor
         HumanoidStateTrick(targetPos)
         AnchorTeleport(targetPos, 1.2)
     end
     
     wait(0.2)
     
-    -- STEP 4: DISABLE NoClip (IMPORTANT!)
     DisableNoClip()
     ShowNotification("🔒 NoClip: OFF (Arrived!)", Color3.fromRGB(255, 140, 0))
     
     wait(0.3)
     
-    -- STEP 5: Position lock (with movement detection)
     SmartPositionLock(targetPos, 5.0)
     ShowNotification("🔐 Position Locked 5s", Color3.fromRGB(255, 200, 0))
     
-    -- STEP 6: Continuous position check (backup)
     spawn(function()
         for i = 1, 50 do
             wait(0.1)
@@ -306,19 +269,16 @@ local function STEALTH_TELEPORT(targetPos)
     return true, "Success"
 end
 
--- ==================== GUI CREATION ====================
-
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CustomGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer.PlayerGui
 
--- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 220, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -110, 0.05, 0)
+MainFrame.Size = UDim2.new(0, 240, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -120, 0.05, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 MainFrame.BackgroundTransparency = 0.3
 MainFrame.BorderSizePixel = 0
@@ -333,17 +293,11 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
-Title.Text = "🥷 STEALTH TP v4.0"
+Title.Text = "🥷 V3N0M TP v5.0"
 Title.TextColor3 = Color3.fromRGB(100, 200, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
 Title.Parent = MainFrame
-
-local Container = Instance.new("Frame")
-Container.Size = UDim2.new(1, -20, 1, -55)
-Container.Position = UDim2.new(0, 10, 0, 45)
-Container.BackgroundTransparency = 1
-Container.Parent = MainFrame
 
 -- ==================== MINIMIZE ICON ====================
 
@@ -371,13 +325,11 @@ IconText.TextSize = 24
 IconText.Font = Enum.Font.GothamBold
 IconText.Parent = MinimizeIcon
 
--- Click to open
 MinimizeIcon.MouseButton1Click:Connect(function()
     MainFrame.Visible = true
     MinimizeIcon.Visible = false
 end)
 
--- Hover effect
 MinimizeIcon.MouseEnter:Connect(function()
     MinimizeIcon.BackgroundColor3 = Color3.fromRGB(130, 180, 255)
     MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
@@ -388,203 +340,268 @@ MinimizeIcon.MouseLeave:Connect(function()
     MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
 end)
 
--- ==================== BUTTONS ====================
+-- ==================== SET POSITION BUTTON ====================
 
--- Button Creator
-local function CreateButton(name, text, position, color, callback)
+local SetPosButton = Instance.new("TextButton")
+SetPosButton.Name = "SetPos"
+SetPosButton.Size = UDim2.new(1, -20, 0, 45)
+SetPosButton.Position = UDim2.new(0, 10, 0, 45)
+SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+SetPosButton.BorderSizePixel = 0
+SetPosButton.Text = "📍 SET POSITION"
+SetPosButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SetPosButton.TextSize = 14
+SetPosButton.Font = Enum.Font.GothamBold
+SetPosButton.Parent = MainFrame
+
+local SetPosCorner = Instance.new("UICorner")
+SetPosCorner.CornerRadius = UDim.new(0, 8)
+SetPosCorner.Parent = SetPosButton
+
+local SaveCounter = Instance.new("TextLabel")
+SaveCounter.Size = UDim2.new(0, 70, 1, 0)
+SaveCounter.Position = UDim2.new(1, -75, 0, 0)
+SaveCounter.BackgroundTransparency = 1
+SaveCounter.Text = "0/" .. MAX_SAVES
+SaveCounter.TextColor3 = Color3.fromRGB(255, 255, 255)
+SaveCounter.TextSize = 11
+SaveCounter.Font = Enum.Font.GothamBold
+SaveCounter.Parent = SetPosButton
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "TeleportList"
+ScrollFrame.Size = UDim2.new(1, -20, 1, -180)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 100)
+ScrollFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+ScrollFrame.BackgroundTransparency = 0.5
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 150, 255)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.Parent = MainFrame
+
+local ScrollCorner = Instance.new("UICorner")
+ScrollCorner.CornerRadius = UDim.new(0, 8)
+ScrollCorner.Parent = ScrollFrame
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, 5)
+ListLayout.Parent = ScrollFrame
+
+ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local EmptyLabel = Instance.new("TextLabel")
+EmptyLabel.Name = "EmptyLabel"
+EmptyLabel.Size = UDim2.new(1, -20, 1, -20)
+EmptyLabel.Position = UDim2.new(0, 10, 0, 10)
+EmptyLabel.BackgroundTransparency = 1
+EmptyLabel.Text = "No saved positions yet\n\nClick SET POSITION to start!"
+EmptyLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+EmptyLabel.TextSize = 12
+EmptyLabel.Font = Enum.Font.GothamBold
+EmptyLabel.TextWrapped = true
+EmptyLabel.Parent = ScrollFrame
+
+-- ==================== FUNCTION: CREATE TP BUTTON ====================
+
+local function CreateTeleportButton(index, position)
     local Button = Instance.new("TextButton")
-    Button.Name = name
-    Button.Size = UDim2.new(1, 0, 0, 45)
-    Button.Position = position
-    Button.BackgroundColor3 = color
+    Button.Name = "TPSave" .. index
+    Button.Size = UDim2.new(1, -10, 0, 50)
+    Button.BackgroundColor3 = Color3.fromRGB(50, 100, 150)
     Button.BorderSizePixel = 0
-    Button.Text = text
-    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Button.TextSize = 13
-    Button.Font = Enum.Font.GothamSemibold
     Button.AutoButtonColor = false
-    Button.Parent = Container
+    Button.Parent = ScrollFrame
     
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Button
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 8)
+    BtnCorner.Parent = Button
     
-    local Status = Instance.new("TextLabel")
-    Status.Name = "Status"
-    Status.Size = UDim2.new(0, 60, 1, 0)
-    Status.Position = UDim2.new(1, -65, 0, 0)
-    Status.BackgroundTransparency = 1
-    Status.Text = ""
-    Status.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Status.TextSize = 10
-    Status.Font = Enum.Font.GothamBold
-    Status.Parent = Button
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size = UDim2.new(1, -50, 0, 20)
+    TitleLabel.Position = UDim2.new(0, 5, 0, 5)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = "📌 TP SAVE " .. index
+    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLabel.TextSize = 12
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = Button
+    
+    local PosLabel = Instance.new("TextLabel")
+    PosLabel.Size = UDim2.new(1, -50, 0, 25)
+    PosLabel.Position = UDim2.new(0, 5, 0, 25)
+    PosLabel.BackgroundTransparency = 1
+    PosLabel.Text = string.format("X:%.0f Y:%.0f Z:%.0f", position.X, position.Y, position.Z)
+    PosLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    PosLabel.TextSize = 9
+    PosLabel.Font = Enum.Font.Gotham
+    PosLabel.TextXAlignment = Enum.TextXAlignment.Left
+    PosLabel.Parent = Button
+    
+    local DeleteBtn = Instance.new("TextButton")
+    DeleteBtn.Size = UDim2.new(0, 35, 0, 35)
+    DeleteBtn.Position = UDim2.new(1, -40, 0, 7.5)
+    DeleteBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    DeleteBtn.BorderSizePixel = 0
+    DeleteBtn.Text = "🗑️"
+    DeleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DeleteBtn.TextSize = 16
+    DeleteBtn.Font = Enum.Font.GothamBold
+    DeleteBtn.Parent = Button
+    
+    local DelCorner = Instance.new("UICorner")
+    DelCorner.CornerRadius = UDim.new(0, 8)
+    DelCorner.Parent = DeleteBtn
     
     Button.MouseButton1Click:Connect(function()
-        callback(Button, Status)
-    end)
-    
-    Button.MouseEnter:Connect(function()
-        Button.BackgroundColor3 = Color3.new(
-            math.min(color.R * 1.3, 1),
-            math.min(color.G * 1.3, 1),
-            math.min(color.B * 1.3, 1)
-        )
-    end)
-    
-    Button.MouseLeave:Connect(function()
-        Button.BackgroundColor3 = color
-    end)
-    
-    return Button, Status
-end
-
--- SET POSITION Button
-CreateButton("SetPos", "SET POSITION", UDim2.new(0, 0, 0, 0),
-    Color3.fromRGB(139, 0, 0),
-    function(btn, status)
-        if not HumanoidRootPart then return end
-        
-        SavedPosition = HumanoidRootPart.Position
-        btn.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
-        status.Text = "✓ SAVED"
-        
-        ShowNotification("📍 Position Saved!", Color3.fromRGB(0, 255, 0))
-        
-        wait(1.5)
-        btn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-        status.Text = ""
-    end
-)
-
--- TELEPORT Button
-CreateButton("TpPos", "TELEPORT (STEALTH)", UDim2.new(0, 0, 0, 55),
-    Color3.fromRGB(100, 150, 255),
-    function(btn, status)
-        if not SavedPosition then
-            ShowNotification("❌ No position saved!", Color3.fromRGB(255, 50, 50))
-            return
-        end
-        
         if IsTeleporting then
             ShowNotification("⏳ Please wait...", Color3.fromRGB(255, 100, 0))
             return
         end
         
-        status.Text = "TP..."
-        ShowNotification("🥷 Stealth TP Starting...", Color3.fromRGB(100, 150, 255))
+        ShowNotification("🥷 Teleporting to Save " .. index .. "...", Color3.fromRGB(100, 150, 255))
         
         spawn(function()
-            local success, msg = STEALTH_TELEPORT(SavedPosition)
+            local success, msg = V3N0M_TELEPORT(position)
             
             if success then
-                status.Text = "✓ DONE"
+                ShowNotification("✓ Arrived at Save " .. index .. "!", Color3.fromRGB(0, 255, 0))
             else
                 ShowNotification("❌ Failed: " .. msg, Color3.fromRGB(255, 50, 50))
-                status.Text = "✗ FAIL"
             end
-            
-            wait(2)
-            status.Text = ""
         end)
-    end
-)
+    end)
+    
+    DeleteBtn.MouseButton1Click:Connect(function()
+        table.remove(SavedPositions, index)
+        RefreshTeleportList()
+        ShowNotification("🗑️ Save " .. index .. " deleted!", Color3.fromRGB(255, 100, 0))
+    end)
+    
+    Button.MouseEnter:Connect(function()
+        Button.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    end)
+    
+    Button.MouseLeave:Connect(function()
+        Button.BackgroundColor3 = Color3.fromRGB(50, 100, 150)
+    end)
+    
+    DeleteBtn.MouseEnter:Connect(function()
+        DeleteBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+    end)
+    
+    DeleteBtn.MouseLeave:Connect(function()
+        DeleteBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+    end)
+    
+    return Button
+end
 
--- Info Panel
-local InfoBox = Instance.new("Frame")
-InfoBox.Size = UDim2.new(1, 0, 0, 130)
-InfoBox.Position = UDim2.new(0, 0, 0, 110)
-InfoBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-InfoBox.BackgroundTransparency = 0.5
-InfoBox.BorderSizePixel = 0
-InfoBox.Parent = Container
+-- ==================== REFRESH LIST ====================
+
+function RefreshTeleportList()
+    for _, child in pairs(ScrollFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    SaveCounter.Text = #SavedPositions .. "/" .. MAX_SAVES
+    
+    if #SavedPositions == 0 then
+        EmptyLabel.Visible = true
+    else
+        EmptyLabel.Visible = false
+        
+        for i, pos in ipairs(SavedPositions) do
+            CreateTeleportButton(i, pos)
+        end
+    end
+end
+
+-- ==================== SET POSITION HANDLER ====================
+
+SetPosButton.MouseButton1Click:Connect(function()
+    if not HumanoidRootPart then return end
+    
+    if #SavedPositions >= MAX_SAVES then
+        ShowNotification("❌ Maximum " .. MAX_SAVES .. " saves reached!", Color3.fromRGB(255, 50, 50))
+        return
+    end
+    
+    local currentPos = HumanoidRootPart.Position
+    table.insert(SavedPositions, currentPos)
+    
+    RefreshTeleportList()
+    
+    SetPosButton.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
+    ShowNotification("📍 Position " .. #SavedPositions .. " saved!", Color3.fromRGB(0, 255, 0))
+    
+    wait(1)
+    SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+end)
+
+SetPosButton.MouseEnter:Connect(function()
+    if #SavedPositions < MAX_SAVES then
+        SetPosButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+    end
+end)
+
+SetPosButton.MouseLeave:Connect(function()
+    SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+end)
+
+local InfoPanel = Instance.new("Frame")
+InfoPanel.Size = UDim2.new(1, -20, 0, 70)
+InfoPanel.Position = UDim2.new(0, 10, 1, -80)
+InfoPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+InfoPanel.BackgroundTransparency = 0.5
+InfoPanel.BorderSizePixel = 0
+InfoPanel.Parent = MainFrame
 
 local InfoCorner = Instance.new("UICorner")
 InfoCorner.CornerRadius = UDim.new(0, 8)
-InfoCorner.Parent = InfoBox
-
-local InfoTitle = Instance.new("TextLabel")
-InfoTitle.Size = UDim2.new(1, -10, 0, 20)
-InfoTitle.Position = UDim2.new(0, 5, 0, 5)
-InfoTitle.BackgroundTransparency = 1
-InfoTitle.Text = "📍 SAVED POSITION:"
-InfoTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-InfoTitle.TextSize = 11
-InfoTitle.Font = Enum.Font.GothamBold
-InfoTitle.TextXAlignment = Enum.TextXAlignment.Left
-InfoTitle.Parent = InfoBox
-
-local PosText = Instance.new("TextLabel")
-PosText.Size = UDim2.new(1, -10, 0, 75)
-PosText.Position = UDim2.new(0, 5, 0, 25)
-PosText.BackgroundTransparency = 1
-PosText.Text = "None"
-PosText.TextColor3 = Color3.fromRGB(200, 200, 200)
-PosText.TextSize = 10
-PosText.Font = Enum.Font.Gotham
-PosText.TextXAlignment = Enum.TextXAlignment.Left
-PosText.TextYAlignment = Enum.TextYAlignment.Top
-PosText.Parent = InfoBox
-
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, -10, 0, 25)
-StatusLabel.Position = UDim2.new(0, 5, 0, 100)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Status: Ready"
-StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-StatusLabel.TextSize = 10
-StatusLabel.Font = Enum.Font.GothamBold
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.Parent = InfoBox
-
--- NoClip Status Indicator
-local NoClipStatus = Instance.new("Frame")
-NoClipStatus.Size = UDim2.new(1, 0, 0, 35)
-NoClipStatus.Position = UDim2.new(0, 0, 0, 250)
-NoClipStatus.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-NoClipStatus.BackgroundTransparency = 0.5
-NoClipStatus.BorderSizePixel = 0
-NoClipStatus.Parent = Container
-
-local NoClipCorner = Instance.new("UICorner")
-NoClipCorner.CornerRadius = UDim.new(0, 8)
-NoClipCorner.Parent = NoClipStatus
+InfoCorner.Parent = InfoPanel
 
 local NoClipText = Instance.new("TextLabel")
-NoClipText.Size = UDim2.new(1, -10, 1, -10)
+NoClipText.Size = UDim2.new(1, -10, 0, 20)
 NoClipText.Position = UDim2.new(0, 5, 0, 5)
 NoClipText.BackgroundTransparency = 1
 NoClipText.Text = "🔒 NoClip: OFF"
 NoClipText.TextColor3 = Color3.fromRGB(255, 255, 255)
 NoClipText.TextSize = 11
 NoClipText.Font = Enum.Font.GothamBold
-NoClipText.Parent = NoClipStatus
+NoClipText.TextXAlignment = Enum.TextXAlignment.Left
+NoClipText.Parent = InfoPanel
 
--- Stealth Info Box
-local StealthBox = Instance.new("Frame")
-StealthBox.Size = UDim2.new(1, 0, 0, 70)
-StealthBox.Position = UDim2.new(0, 0, 0, 295)
-StealthBox.BackgroundColor3 = Color3.fromRGB(50, 100, 150)
-StealthBox.BackgroundTransparency = 0.3
-StealthBox.BorderSizePixel = 0
-StealthBox.Parent = Container
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(1, -10, 0, 20)
+StatusText.Position = UDim2.new(0, 5, 0, 25)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "✓ Status: Ready"
+StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+StatusText.TextSize = 10
+StatusText.Font = Enum.Font.GothamBold
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Parent = InfoPanel
 
-local StealthCorner = Instance.new("UICorner")
-StealthCorner.CornerRadius = UDim.new(0, 8)
-StealthCorner.Parent = StealthBox
+local VersionText = Instance.new("TextLabel")
+VersionText.Size = UDim2.new(1, -10, 0, 15)
+VersionText.Position = UDim2.new(0, 5, 0, 50)
+VersionText.BackgroundTransparency = 1
+VersionText.Text = "🥷 Multi-Save System | v5.0"
+VersionText.TextColor3 = Color3.fromRGB(100, 150, 255)
+VersionText.TextSize = 8
+VersionText.Font = Enum.Font.GothamBold
+VersionText.TextXAlignment = Enum.TextXAlignment.Left
+VersionText.Parent = InfoPanel
 
-local StealthText = Instance.new("TextLabel")
-StealthText.Size = UDim2.new(1, -10, 1, -10)
-StealthText.Position = UDim2.new(0, 5, 0, 5)
-StealthText.BackgroundTransparency = 1
-StealthText.Text = "🥷 STEALTH MODE 🥷\n\n✓ NoClip OFF after TP\n✓ Anti-Detection System\n✓ Move after 5s or earlier"
-StealthText.TextColor3 = Color3.fromRGB(255, 255, 255)
-StealthText.TextSize = 9
-StealthText.Font = Enum.Font.GothamBold
-StealthText.TextWrapped = true
-StealthText.Parent = StealthBox
+-- ==================== CLOSE BUTTON ====================
 
--- Close Button (MINIMIZE)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -35, 0, 5)
@@ -601,7 +618,6 @@ CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
 CloseButton.MouseButton1Click:Connect(function()
-    -- MINIMIZE (bukan destroy)
     MainFrame.Visible = false
     MinimizeIcon.Visible = true
     ShowNotification("🥷 Menu minimized - Active features running!", Color3.fromRGB(100, 150, 255))
@@ -615,7 +631,8 @@ CloseButton.MouseLeave:Connect(function()
     CloseButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
 end)
 
--- Notification
+-- ==================== NOTIFICATION ====================
+
 function ShowNotification(text, color)
     color = color or Color3.fromRGB(0, 155, 0)
     
@@ -651,42 +668,36 @@ function ShowNotification(text, color)
     end)
 end
 
--- Update display
+-- ==================== UPDATE LOOP ====================
+
 spawn(function()
     while wait(0.3) do
-        if SavedPosition and HumanoidRootPart then
-            local dist = (SavedPosition - HumanoidRootPart.Position).Magnitude
-            PosText.Text = string.format("X: %.1f  Y: %.1f  Z: %.1f\n\nDistance: %.1f studs", 
-                SavedPosition.X, SavedPosition.Y, SavedPosition.Z, dist)
-        end
-        
-        -- Update NoClip indicator
         if NoClipConnection then
-            NoClipStatus.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
             NoClipText.Text = "🔓 NoClip: ON"
+            NoClipText.TextColor3 = Color3.fromRGB(0, 255, 100)
         else
-            NoClipStatus.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
             NoClipText.Text = "🔒 NoClip: OFF"
+            NoClipText.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
         
-        -- Update status
         if IsTeleporting then
-            StatusLabel.Text = "⚡ Status: Teleporting..."
-            StatusLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
+            StatusText.Text = "⚡ Status: Teleporting..."
+            StatusText.TextColor3 = Color3.fromRGB(100, 150, 255)
         elseif PositionLockConnection then
-            StatusLabel.Text = "🔐 Status: Locked (5s)"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+            StatusText.Text = "🔐 Status: Locked (5s)"
+            StatusText.TextColor3 = Color3.fromRGB(255, 200, 0)
         elseif PlayerIsMoving then
-            StatusLabel.Text = "🏃 Status: Moving (Unlocked)"
-            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+            StatusText.Text = "🏃 Status: Moving (Unlocked)"
+            StatusText.TextColor3 = Color3.fromRGB(0, 255, 100)
         else
-            StatusLabel.Text = "✓ Status: Ready"
-            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            StatusText.Text = "✓ Status: Ready"
+            StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
         end
     end
 end)
 
--- Character respawn
+-- ==================== CHARACTER RESPAWN ====================
+
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart", 10)
@@ -697,10 +708,15 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     PlayerIsMoving = false
 end)
 
--- Load notification
+-- ==================== LOAD NOTIFICATION ====================
+
 spawn(function()
     wait(0.5)
-    ShowNotification("🥷 STEALTH TP v4.0 LOADED!\nClose (X) to minimize menu!", Color3.fromRGB(100, 150, 255))
+    -- Notifikasi Custom GUI (Tetap ada)
+    ShowNotification("🥷 V3N0M TP v5.0 LOADED!\n📍 Multi-Save System Active!", Color3.fromRGB(100, 150, 255))
 end)
 
-print("🥷 STEALTH TELEPORT v4.0 LOADED - With Minimize Icon!")
+print("🥷 V3N0M TELEPORT v5.0 - MULTI SAVE SYSTEM LOADED!")
+print("✓ Save up to 20 positions")
+print("✓ Scrollable teleport list")
+print("✓ Click any save to teleport!")
