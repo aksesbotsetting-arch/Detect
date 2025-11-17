@@ -317,8 +317,8 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 30)
 Title.BackgroundTransparency = 1
-Title.Text = "🥷 STEALTH TP v6.0"
-Title.TextColor3 = Color3.fromRGB(100, 200, 255)
+Title.Text = "👑  X - V3N0M V1.0"
+Title.TextColor3 = Color3.fromRGB(255, 100, 0)
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
 Title.Parent = MainFrame
@@ -328,12 +328,12 @@ local MinimizeIcon = Instance.new("TextButton")
 MinimizeIcon.Name = "MinimizeIcon"
 MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
 MinimizeIcon.Position = UDim2.new(0, 10, 0.5, -27)
-MinimizeIcon.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+MinimizeIcon.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 MinimizeIcon.BorderSizePixel = 0
 MinimizeIcon.Active = true
 MinimizeIcon.Draggable = true
 MinimizeIcon.Visible = false
-MinimizeIcon.Text = "🥷"
+MinimizeIcon.Text = "💀"
 MinimizeIcon.TextSize = 28
 MinimizeIcon.Font = Enum.Font.GothamBold
 MinimizeIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -398,7 +398,7 @@ ButtonContainer.Parent = MainFrame
 local SetPosButton = Instance.new("TextButton")
 SetPosButton.Size = UDim2.new(0.48, 0, 0, 38)
 SetPosButton.Position = UDim2.new(0, 0, 0, 0)
-SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+SetPosButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 SetPosButton.BorderSizePixel = 0
 SetPosButton.Text = "📍 SET POS"
 SetPosButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -414,7 +414,7 @@ SetPosCorner.Parent = SetPosButton
 local SaveButton = Instance.new("TextButton")
 SaveButton.Size = UDim2.new(0.48, 0, 0, 38)
 SaveButton.Position = UDim2.new(0.52, 0, 0, 0)
-SaveButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+SaveButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 SaveButton.BorderSizePixel = 0
 SaveButton.Text = "💾 SAVE"
 SaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -430,7 +430,7 @@ SaveCorner.Parent = SaveButton
 local LoadButton = Instance.new("TextButton")
 LoadButton.Size = UDim2.new(0.48, 0, 0, 38)
 LoadButton.Position = UDim2.new(0, 0, 0, 47)
-LoadButton.BackgroundColor3 = Color3.fromRGB(0, 100, 139)
+LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 LoadButton.BorderSizePixel = 0
 LoadButton.Text = "📂 LOAD"
 LoadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -503,7 +503,7 @@ InputCorner.Parent = CoordInput
 local AddCoordButton = Instance.new("TextButton")
 AddCoordButton.Size = UDim2.new(0, 80, 0, 22)
 AddCoordButton.Position = UDim2.new(1, -85, 0, 20)
-AddCoordButton.BackgroundColor3 = Color3.fromRGB(0, 139, 0)
+AddCoordButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 AddCoordButton.BorderSizePixel = 0
 AddCoordButton.Text = "➕ ADD"
 AddCoordButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -861,18 +861,18 @@ SaveButton.MouseLeave:Connect(function()
 end)
 
 LoadButton.MouseButton1Click:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(0, 130, 180)
+    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
     LoadFromFile()
     wait(1)
-    LoadButton.BackgroundColor3 = Color3.fromRGB(0, 100, 139)
+    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 end)
 
 LoadButton.MouseEnter:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(0, 130, 180)
+    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 end)
 
 LoadButton.MouseLeave:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(0, 100, 139)
+    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
 end)
 
 AddCoordButton.MouseButton1Click:Connect(function()
