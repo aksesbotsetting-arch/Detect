@@ -25,8 +25,6 @@ local IsTeleporting = false
 local NoClipConnection = nil
 local PositionLockConnection = nil
 
--- ==================== V3N0M BYPASS METHODS ====================
-
 local function EnableNoClip()
     if NoClipConnection then return end
     
@@ -177,10 +175,7 @@ local function HumanoidStateTrick(targetPos)
     end)
 end
 
-BAGIAN 2/4:
--- ==================== ULTIMATE V3N0M TELEPORT ====================
-
-local function V3N0M_TELEPORT(targetPos)
+local function STEALTH_TELEPORT(targetPos)
     if IsTeleporting then
         return false, "Already teleporting"
     end
@@ -293,13 +288,11 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
-Title.Text = "🥷 V3N0M TP v5.0"
+Title.Text = "🥷 STEALTH TP v5.0"
 Title.TextColor3 = Color3.fromRGB(100, 200, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
 Title.Parent = MainFrame
-
--- ==================== MINIMIZE ICON ====================
 
 local MinimizeIcon = Instance.new("ImageButton")
 MinimizeIcon.Name = "MinimizeIcon"
@@ -339,8 +332,6 @@ MinimizeIcon.MouseLeave:Connect(function()
     MinimizeIcon.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
     MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
 end)
-
--- ==================== SET POSITION BUTTON ====================
 
 local SetPosButton = Instance.new("TextButton")
 SetPosButton.Name = "SetPos"
@@ -405,8 +396,6 @@ EmptyLabel.Font = Enum.Font.GothamBold
 EmptyLabel.TextWrapped = true
 EmptyLabel.Parent = ScrollFrame
 
--- ==================== FUNCTION: CREATE TP BUTTON ====================
-
 local function CreateTeleportButton(index, position)
     local Button = Instance.new("TextButton")
     Button.Name = "TPSave" .. index
@@ -466,7 +455,7 @@ local function CreateTeleportButton(index, position)
         ShowNotification("🥷 Teleporting to Save " .. index .. "...", Color3.fromRGB(100, 150, 255))
         
         spawn(function()
-            local success, msg = V3N0M_TELEPORT(position)
+            local success, msg = STEALTH_TELEPORT(position)
             
             if success then
                 ShowNotification("✓ Arrived at Save " .. index .. "!", Color3.fromRGB(0, 255, 0))
@@ -501,8 +490,6 @@ local function CreateTeleportButton(index, position)
     return Button
 end
 
--- ==================== REFRESH LIST ====================
-
 function RefreshTeleportList()
     for _, child in pairs(ScrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
@@ -522,8 +509,6 @@ function RefreshTeleportList()
         end
     end
 end
-
--- ==================== SET POSITION HANDLER ====================
 
 SetPosButton.MouseButton1Click:Connect(function()
     if not HumanoidRootPart then return end
@@ -554,6 +539,7 @@ end)
 SetPosButton.MouseLeave:Connect(function()
     SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
 end)
+
 
 local InfoPanel = Instance.new("Frame")
 InfoPanel.Size = UDim2.new(1, -20, 0, 70)
@@ -600,8 +586,6 @@ VersionText.Font = Enum.Font.GothamBold
 VersionText.TextXAlignment = Enum.TextXAlignment.Left
 VersionText.Parent = InfoPanel
 
--- ==================== CLOSE BUTTON ====================
-
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -35, 0, 5)
@@ -630,8 +614,6 @@ end)
 CloseButton.MouseLeave:Connect(function()
     CloseButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
 end)
-
--- ==================== NOTIFICATION ====================
 
 function ShowNotification(text, color)
     color = color or Color3.fromRGB(0, 155, 0)
@@ -668,8 +650,6 @@ function ShowNotification(text, color)
     end)
 end
 
--- ==================== UPDATE LOOP ====================
-
 spawn(function()
     while wait(0.3) do
         if NoClipConnection then
@@ -696,8 +676,6 @@ spawn(function()
     end
 end)
 
--- ==================== CHARACTER RESPAWN ====================
-
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart", 10)
@@ -708,15 +686,12 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     PlayerIsMoving = false
 end)
 
--- ==================== LOAD NOTIFICATION ====================
-
 spawn(function()
     wait(0.5)
-    -- Notifikasi Custom GUI (Tetap ada)
-    ShowNotification("🥷 V3N0M TP v5.0 LOADED!\n📍 Multi-Save System Active!", Color3.fromRGB(100, 150, 255))
+    ShowNotification("🥷 STEALTH TP v5.0 LOADED!\n📍 Multi-Save System Active!", Color3.fromRGB(100, 150, 255))
 end)
 
-print("🥷 V3N0M TELEPORT v5.0 - MULTI SAVE SYSTEM LOADED!")
+print("🥷 STEALTH TELEPORT v5.0 - MULTI SAVE SYSTEM LOADED!")
 print("✓ Save up to 20 positions")
 print("✓ Scrollable teleport list")
 print("✓ Click any save to teleport!")
