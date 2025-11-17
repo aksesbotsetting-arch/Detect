@@ -51,25 +51,23 @@ function StartRecording()
         startTime = tick()
     }
     
-    ShowNotification("🔴 RECORDING STARTED", Color3.fromRGB(255, 0, 0))
+    ShowNotification("🔴 RECORDING STARTED - Gerakkan karaktermu!", Color3.fromRGB(255, 0, 0))
     
     -- Catat posisi awal
     table.insert(CurrentRecording.positions, HumanoidRootPart.Position)
     table.insert(CurrentRecording.timestamps, 0)
     
-    -- Connection untuk mencatat pergerakan
+    -- Connection untuk mencatat pergerakan (DIPERBAIKI)
     RecordConnection = RunService.Heartbeat:Connect(function(deltaTime)
         if not IsRecording or not HumanoidRootPart then return end
         
         local currentTime = tick() - CurrentRecording.startTime
         local currentPos = HumanoidRootPart.Position
-        local lastPos = CurrentRecording.positions[#CurrentRecording.positions]
         
-        -- Hanya catat jika posisi berubah signifikan
-        if lastPos and (currentPos - lastPos).Magnitude > 0.5 then
-            table.insert(CurrentRecording.positions, currentPos)
-            table.insert(CurrentRecording.timestamps, currentTime)
-        end
+        -- Selalu catat posisi (tidak peduli berubah atau tidak)
+        -- Ini memungkinkan animasi loncat dll terekam dengan baik
+        table.insert(CurrentRecording.positions, currentPos)
+        table.insert(CurrentRecording.timestamps, currentTime)
     end)
 end
 
@@ -125,19 +123,10 @@ function PlayWalkRecording(recordingName)
     
     ShowNotification("▶️ PLAYING: " .. recordingName, Color3.fromRGB(0, 255, 0))
     
-    -- Enable NoClip selama playback
-    local NoClipConnection = RunService.Stepped:Connect(function()
-        pcall(function()
-            for _, part in pairs(Character:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
-            end
-        end)
-    end)
-    
+    -- NONAKTIFKAN NO CLIP (BIAR ANIMASI BERJALAN)
     PlaybackConnection = RunService.Heartbeat:Connect(function(deltaTime)
         if not IsPlaying or not HumanoidRootPart then
             if PlaybackConnection then PlaybackConnection:Disconnect() PlaybackConnection = nil end
-            if NoClipConnection then NoClipConnection:Disconnect() NoClipConnection = nil end
             return
         end
         
@@ -157,14 +146,17 @@ function PlayWalkRecording(recordingName)
             return
         end
         
-        -- Interpolasi posisi
+        -- Interpolasi posisi untuk gerakan halus
         local targetPos
         if currentIndex < #recording.positions then
             local nextIndex = currentIndex + 1
             local timeDiff = recording.timestamps[nextIndex] - recording.timestamps[currentIndex]
-            local progress = (currentTime - recording.timestamps[currentIndex]) / timeDiff
+            local progress = 0
             
-            if progress > 1 then progress = 1 end
+            if timeDiff > 0 then
+                progress = (currentTime - recording.timestamps[currentIndex]) / timeDiff
+                if progress > 1 then progress = 1 end
+            end
             
             targetPos = recording.positions[currentIndex]:Lerp(
                 recording.positions[nextIndex], 
@@ -174,19 +166,17 @@ function PlayWalkRecording(recordingName)
             targetPos = recording.positions[currentIndex]
         end
         
-        -- Terapkan posisi dengan orientasi
-if targetPos then
-    local currentCFrame = HumanoidRootPart.CFrame
-    local lookDirection = (targetPos - currentCFrame.Position).Unit
-
-    if ReverseOrientation then
-        -- Balik orientasi
-        HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos - lookDirection)
-    else
-        -- Orientasi normal
-        HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos + lookDirection)
-    end
-end
+        -- TERAPKAN POSISI TANPA MENGUBAH ORIENTASI (BIAR ANIMASI ALAMI)
+        if targetPos then
+            local currentCFrame = HumanoidRootPart.CFrame
+            -- Simpan rotasi saat ini, hanya ubah posisi
+            HumanoidRootPart.CFrame = CFrame.new(targetPos) * currentCFrame.Rotation
+            
+            -- Jika reverse orientation aktif, balik arah hadap
+            if ReverseOrientation then
+                HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+            end
+        end
     end)
 end
 
@@ -200,17 +190,7 @@ function StopPlayback()
         PlaybackConnection = nil
     end
     
-    -- Disable NoClip
-    pcall(function()
-        for _, part in pairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.CanCollide = true
-            end
-        end
-        if HumanoidRootPart then
-            HumanoidRootPart.CanCollide = false
-        end
-    end)
+    -- Tidak perlu disable NoClip karena tidak dipakai
 end
 
 -- Fungsi untuk pause/lanjutkan playback
@@ -372,10 +352,6 @@ MinimizeButton.MouseButton1Click:Connect(function()
     MinimizeIcon.Visible = true
     ShowNotification("⚡ Minimized - Auto Walk Recorder Active!", Color3.fromRGB(255, 100, 0))
 end)
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseButton
 
 -- Tombol Utama (Record/Save, Pause/Lanjutkan, Balik Badan/Normal)
 local MainButtonsFrame = Instance.new("Frame")
@@ -628,9 +604,73 @@ local function CreateWalkCPButton(recordingName, recordingData)
     end)
     
     DeleteBtn.MouseButton1Click:Connect(function()
-        WalkRecordings[recordingName] = nil
-        RefreshWalkCPList()
-        ShowNotification("🗑️ Deleted: " .. recordingName, Color3.fromRGB(255, 100, 0))
+        -- Buat popup konfirmasi
+        local ConfirmFrame = Instance.new("Frame")
+        ConfirmFrame.Size = UDim2.new(0, 250, 0, 120)
+        ConfirmFrame.Position = UDim2.new(0.5, -125, 0.5, -60)
+        ConfirmFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        ConfirmFrame.BorderSizePixel = 0
+        ConfirmFrame.ZIndex = 10
+        ConfirmFrame.Parent = ScreenGui
+        
+        local ConfirmCorner = Instance.new("UICorner")
+        ConfirmCorner.CornerRadius = UDim.new(0, 10)
+        ConfirmCorner.Parent = ConfirmFrame
+        
+        local ConfirmTitle = Instance.new("TextLabel")
+        ConfirmTitle.Size = UDim2.new(1, -20, 0, 25)
+        ConfirmTitle.Position = UDim2.new(0, 10, 0, 10)
+        ConfirmTitle.BackgroundTransparency = 1
+        ConfirmTitle.Text = "⚠️ Konfirmasi Hapus"
+        ConfirmTitle.TextColor3 = Color3.fromRGB(255, 200, 0)
+        ConfirmTitle.TextSize = 14
+        ConfirmTitle.Font = Enum.Font.GothamBold
+        ConfirmTitle.Parent = ConfirmFrame
+        
+        local ConfirmText = Instance.new("TextLabel")
+        ConfirmText.Size = UDim2.new(1, -20, 0, 40)
+        ConfirmText.Position = UDim2.new(0, 10, 0, 35)
+        ConfirmText.BackgroundTransparency = 1
+        ConfirmText.Text = "Apakah kamu yakin ingin menghapus:\n" .. recordingName .. "?"
+        ConfirmText.TextColor3 = Color3.fromRGB(200, 200, 200)
+        ConfirmText.TextSize = 11
+        ConfirmText.Font = Enum.Font.Gotham
+        ConfirmText.TextWrapped = true
+        ConfirmText.Parent = ConfirmFrame
+        
+        local YesButton = Instance.new("TextButton")
+        YesButton.Size = UDim2.new(0.4, 0, 0, 30)
+        YesButton.Position = UDim2.new(0.1, 0, 0, 80)
+        YesButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        YesButton.BorderSizePixel = 0
+        YesButton.Text = "✓ YA"
+        YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        YesButton.TextSize = 12
+        YesButton.Font = Enum.Font.GothamBold
+        YesButton.Parent = ConfirmFrame
+        
+        local NoButton = Instance.new("TextButton")
+        NoButton.Size = UDim2.new(0.4, 0, 0, 30)
+        NoButton.Position = UDim2.new(0.5, 0, 0, 80)
+        NoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        NoButton.BorderSizePixel = 0
+        NoButton.Text = "✗ TIDAK"
+        NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        NoButton.TextSize = 12
+        NoButton.Font = Enum.Font.GothamBold
+        NoButton.Parent = ConfirmFrame
+        
+        YesButton.MouseButton1Click:Connect(function()
+            WalkRecordings[recordingName] = nil
+            RefreshWalkCPList()
+            ConfirmFrame:Destroy()
+            ShowNotification("🗑️ Deleted: " .. recordingName, Color3.fromRGB(255, 100, 0))
+        end)
+        
+        NoButton.MouseButton1Click:Connect(function()
+            ConfirmFrame:Destroy()
+            ShowNotification("❌ Delete cancelled", Color3.fromRGB(200, 200, 200))
+        end)
     end)
     
     Button.MouseEnter:Connect(function()
@@ -716,8 +756,7 @@ ReverseButton.MouseButton1Click:Connect(function()
         
         -- Balik badan karakter langsung
         if HumanoidRootPart then
-            local currentCF = HumanoidRootPart.CFrame
-            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position - currentCF.LookVector)
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
         end
     else
         ReverseButton.Text = "🔄 BALIK BADAN"
@@ -727,8 +766,7 @@ ReverseButton.MouseButton1Click:Connect(function()
         
         -- Kembalikan orientasi normal
         if HumanoidRootPart then
-            local currentCF = HumanoidRootPart.CFrame
-            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position + currentCF.LookVector)
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
         end
     end
 end)
@@ -806,6 +844,13 @@ spawn(function()
         else
             StatusText.Text = "📊 Status: Ready"
             StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+        end
+        
+        -- Update orientation status
+        if ReverseOrientation then
+            OrientationText.Text = "🧭 Orientation: Reversed"
+        else
+            OrientationText.Text = "🧭 Orientation: Normal"
         end
     end
 end)
