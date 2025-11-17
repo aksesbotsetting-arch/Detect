@@ -3,8 +3,9 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
-if LocalPlayer.PlayerGui:FindFirstChild("CustomGUI") then
-    LocalPlayer.PlayerGui:FindFirstChild("CustomGUI"):Destroy()
+-- Hapus GUI lama jika ada
+if LocalPlayer.PlayerGui:FindFirstChild("WalkRecorderGUI") then
+    LocalPlayer.PlayerGui:FindFirstChild("WalkRecorderGUI"):Destroy()
 end
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -16,214 +17,226 @@ if not HumanoidRootPart or not Humanoid then
     return
 end
 
--- Variables
-local SavedPositions = {}
-local MAX_SAVES = 20
-local IsTeleporting = false
-local NoClipConnection = nil
-local PositionLockConnection = nil
-local PlayerIsMoving = false
-local SAVE_FILE_NAME = "StealthTP_Saves_v6"
+-- Variabel sistem Auto Walk Recorder
+local WalkRecordings = {} -- {["WALK CP1"] = {positions = {Vector3,...}, timestamps = {number,...}}}
+local CurrentRecording = nil
+local IsRecording = false
+local IsPlaying = false
+local IsPaused = false
+local ReverseOrientation = false
+local PlaybackConnection = nil
+local RecordConnection = nil
+local MAX_RECORDINGS = 20
+local RECORDING_INTERVAL = 0.1 -- Detik antara setiap pencatatan posisi
+local SAVE_FILE_NAME = "AutoWalkRecorder_Saves"
 
 -- Forward declarations
 local ShowNotification
-local RefreshTeleportList
-local SaveToFile
-local LoadFromFile
+local RefreshWalkCPList
+local SaveWalkToFile
+local LoadWalkFromFile
+local StartRecording
+local StopRecording
+local PlayWalkRecording
+local StopPlayback
 
-local function EnableNoClip()
-    if NoClipConnection then return end
-    NoClipConnection = RunService.Stepped:Connect(function()
+-- Fungsi untuk memulai recording
+function StartRecording()
+    if IsRecording then return end
+    
+    IsRecording = true
+    CurrentRecording = {
+        positions = {},
+        timestamps = {},
+        startTime = tick()
+    }
+    
+    ShowNotification("🔴 RECORDING STARTED", Color3.fromRGB(255, 0, 0))
+    
+    -- Catat posisi awal
+    table.insert(CurrentRecording.positions, HumanoidRootPart.Position)
+    table.insert(CurrentRecording.timestamps, 0)
+    
+    -- Connection untuk mencatat pergerakan
+    RecordConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if not IsRecording or not HumanoidRootPart then return end
+        
+        local currentTime = tick() - CurrentRecording.startTime
+        local currentPos = HumanoidRootPart.Position
+        local lastPos = CurrentRecording.positions[#CurrentRecording.positions]
+        
+        -- Hanya catat jika posisi berubah signifikan
+        if lastPos and (currentPos - lastPos).Magnitude > 0.5 then
+            table.insert(CurrentRecording.positions, currentPos)
+            table.insert(CurrentRecording.timestamps, currentTime)
+        end
+    end)
+end
+
+-- Fungsi untuk menghentikan recording dan menyimpan
+function StopRecording()
+    if not IsRecording then return end
+    
+    IsRecording = false
+    if RecordConnection then
+        RecordConnection:Disconnect()
+        RecordConnection = nil
+    end
+    
+    if #CurrentRecording.positions < 2 then
+        ShowNotification("❌ Recording too short!", Color3.fromRGB(255, 50, 50))
+        CurrentRecording = nil
+        return
+    end
+    
+    -- Cari nama yang tersedia
+    local recordingName = "WALK CP1"
+    local index = 1
+    while WalkRecordings[recordingName] and index <= MAX_RECORDINGS do
+        index = index + 1
+        recordingName = "WALK CP" .. index
+    end
+    
+    if index > MAX_RECORDINGS then
+        ShowNotification("❌ Maximum recordings reached!", Color3.fromRGB(255, 50, 50))
+        CurrentRecording = nil
+        return
+    end
+    
+    -- Simpan recording
+    WalkRecordings[recordingName] = CurrentRecording
+    CurrentRecording = nil
+    
+    ShowNotification("💾 Saved as: " .. recordingName, Color3.fromRGB(0, 255, 0))
+    RefreshWalkCPList()
+end
+
+-- Fungsi untuk memainkan ulang rekaman
+function PlayWalkRecording(recordingName)
+    if IsPlaying or not WalkRecordings[recordingName] then return end
+    
+    local recording = WalkRecordings[recordingName]
+    if #recording.positions < 2 then return end
+    
+    IsPlaying = true
+    IsPaused = false
+    local startPlaybackTime = tick()
+    local currentIndex = 1
+    
+    ShowNotification("▶️ PLAYING: " .. recordingName, Color3.fromRGB(0, 255, 0))
+    
+    -- Enable NoClip selama playback
+    local NoClipConnection = RunService.Stepped:Connect(function()
         pcall(function()
             for _, part in pairs(Character:GetDescendants()) do
                 if part:IsA("BasePart") then part.CanCollide = false end
             end
         end)
     end)
+    
+    PlaybackConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if not IsPlaying or not HumanoidRootPart then
+            if PlaybackConnection then PlaybackConnection:Disconnect() PlaybackConnection = nil end
+            if NoClipConnection then NoClipConnection:Disconnect() NoClipConnection = nil end
+            return
+        end
+        
+        if IsPaused then return end
+        
+        local currentTime = tick() - startPlaybackTime
+        
+        -- Cari posisi berikutnya berdasarkan waktu
+        while currentIndex < #recording.timestamps and recording.timestamps[currentIndex + 1] <= currentTime do
+            currentIndex = currentIndex + 1
+        end
+        
+        if currentIndex >= #recording.positions then
+            -- Selesai playback
+            StopPlayback()
+            ShowNotification("✅ Playback Complete: " .. recordingName, Color3.fromRGB(0, 255, 0))
+            return
+        end
+        
+        -- Interpolasi posisi
+        local targetPos
+        if currentIndex < #recording.positions then
+            local nextIndex = currentIndex + 1
+            local timeDiff = recording.timestamps[nextIndex] - recording.timestamps[currentIndex]
+            local progress = (currentTime - recording.timestamps[currentIndex]) / timeDiff
+            
+            if progress > 1 then progress = 1 end
+            
+            targetPos = recording.positions[currentIndex]:Lerp(
+                recording.positions[nextIndex], 
+                progress
+            )
+        else
+            targetPos = recording.positions[currentIndex]
+        end
+        
+        -- Terapkan posisi dengan orientasi
+        if targetPos then
+            local currentCFrame = HumanoidRootPart.CFrame
+            local lookDirection = (targetPos - currentCFrame.Position).Unit
+            
+            if ReverseOrientation then
+                -- Balik orientasi
+                HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos - lookDirection)
+            else
+                -- Orientasi normal
+                HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos + lookDirection)
+            end
+        end
+    end)
 end
 
-local function DisableNoClip()
-    if NoClipConnection then NoClipConnection:Disconnect() NoClipConnection = nil end
+-- Fungsi untuk menghentikan playback
+function StopPlayback()
+    IsPlaying = false
+    IsPaused = false
+    
+    if PlaybackConnection then
+        PlaybackConnection:Disconnect()
+        PlaybackConnection = nil
+    end
+    
+    -- Disable NoClip
     pcall(function()
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                 part.CanCollide = true
             end
         end
-        HumanoidRootPart.CanCollide = false
-    end)
-end
-
-local function ClaimNetworkOwnership()
-    pcall(function()
-        for i = 1, 5 do
-            for _, part in pairs(Character:GetDescendants()) do
-                if part:IsA("BasePart") and part:CanSetNetworkOwnership() then
-                    part:SetNetworkOwner(LocalPlayer)
-                end
-            end
-            wait(0.05)
+        if HumanoidRootPart then
+            HumanoidRootPart.CanCollide = false
         end
     end)
 end
 
-local function DestroyConstraints()
-    pcall(function()
-        for _, obj in pairs(HumanoidRootPart:GetChildren()) do
-            if obj:IsA("BodyMover") or obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") 
-               or obj:IsA("BodyPosition") or obj:IsA("BodyForce") or obj:IsA("Constraint") then
-                obj:Destroy()
-            end
-        end
-    end)
-end
-
-local function SmartPositionLock(targetPos, duration)
-    if PositionLockConnection then PositionLockConnection:Disconnect() end
+-- Fungsi untuk pause/lanjutkan playback
+local function TogglePause()
+    if not IsPlaying then return end
     
-    local startTime = tick()
-    local lockActive = true
-    
-    PositionLockConnection = RunService.Heartbeat:Connect(function()
-        if not HumanoidRootPart or not HumanoidRootPart.Parent then
-            if PositionLockConnection then PositionLockConnection:Disconnect() PositionLockConnection = nil end
-            return
-        end
-        
-        if tick() - startTime > duration then
-            lockActive = false
-            if PositionLockConnection then PositionLockConnection:Disconnect() PositionLockConnection = nil end
-            return
-        end
-        
-        if Humanoid then
-            local moveVector = Humanoid.MoveVector
-            if moveVector.Magnitude > 0.1 then
-                PlayerIsMoving = true
-                lockActive = false
-                if PositionLockConnection then PositionLockConnection:Disconnect() PositionLockConnection = nil end
-                return
-            end
-        end
-        
-        if lockActive and not PlayerIsMoving then
-            local currentPos = HumanoidRootPart.Position
-            local distance = (currentPos - targetPos).Magnitude
-            
-            if distance > 3 then
-                pcall(function()
-                    HumanoidRootPart.CFrame = CFrame.new(targetPos)
-                    HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-                    HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
-                    HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                end)
-            end
-        end
-    end)
-end
-
-local function UnlockPosition()
-    if PositionLockConnection then PositionLockConnection:Disconnect() PositionLockConnection = nil end
-end
-
-local function AnchorTeleport(targetPos, holdTime)
-    pcall(function()
-        for i = 1, 3 do
-            HumanoidRootPart.CFrame = CFrame.new(targetPos)
-            wait(0.03)
-        end
-        HumanoidRootPart.Anchored = true
-        HumanoidRootPart.CFrame = CFrame.new(targetPos)
-        wait(holdTime)
-        HumanoidRootPart.Anchored = false
-        HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-        HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
-    end)
-end
-
-local function HumanoidStateTrick(targetPos)
-    pcall(function()
-        if not Humanoid then return end
-        local originalState = Humanoid:GetState()
-        Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-        wait(0.1)
-        HumanoidRootPart.CFrame = CFrame.new(targetPos)
-        wait(0.2)
-        Humanoid:ChangeState(Enum.HumanoidStateType.Landed)
-    end)
-end
-
-local function STEALTH_TELEPORT(targetPos)
-    if IsTeleporting then return false, "Already teleporting" end
-    
-    IsTeleporting = true
-    PlayerIsMoving = false
-    
-    EnableNoClip()
-    ShowNotification("🔓 NoClip: ON", Color3.fromRGB(100, 150, 255))
-    
-    ClaimNetworkOwnership()
-    DestroyConstraints()
-    wait(0.1)
-    
-    local distance = (targetPos - HumanoidRootPart.Position).Magnitude
-    
-    if distance < 100 then
-        for i = 1, 3 do
-            pcall(function() HumanoidRootPart.CFrame = CFrame.new(targetPos) end)
-            wait(0.05)
-        end
-        AnchorTeleport(targetPos, 0.8)
-    elseif distance < 500 then
-        local steps = math.ceil(distance / 50)
-        local direction = (targetPos - HumanoidRootPart.Position).Unit
-        for i = 1, steps do
-            if not HumanoidRootPart or not HumanoidRootPart.Parent then break end
-            local stepDist = math.min(50, distance - (i-1) * 50)
-            local newPos = HumanoidRootPart.Position + (direction * stepDist)
-            pcall(function() HumanoidRootPart.CFrame = CFrame.new(newPos) end)
-            wait(0.04)
-        end
-        AnchorTeleport(targetPos, 1.0)
+    IsPaused = not IsPaused
+    if IsPaused then
+        ShowNotification("⏸️ PLAYBACK PAUSED", Color3.fromRGB(255, 200, 0))
     else
-        HumanoidStateTrick(targetPos)
-        AnchorTeleport(targetPos, 1.2)
+        ShowNotification("▶️ PLAYBACK RESUMED", Color3.fromRGB(0, 255, 0))
     end
-    
-    wait(0.2)
-    DisableNoClip()
-    ShowNotification("🔒 NoClip: OFF", Color3.fromRGB(255, 140, 0))
-    wait(0.3)
-    SmartPositionLock(targetPos, 5.0)
-    
-    spawn(function()
-        for i = 1, 50 do
-            wait(0.1)
-            if PlayerIsMoving then break end
-            if HumanoidRootPart then
-                local dist = (HumanoidRootPart.Position - targetPos).Magnitude
-                if dist > 5 then
-                    pcall(function()
-                        HumanoidRootPart.CFrame = CFrame.new(targetPos)
-                        HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-                    end)
-                end
-            end
-        end
-        if not PlayerIsMoving then UnlockPosition() end
-    end)
-    
-    wait(0.5)
-    IsTeleporting = false
-    return true, "Success"
 end
 
-function SaveToFile()
+-- Fungsi save/load
+function SaveWalkToFile()
     local success, result = pcall(function()
         local data = {}
-        for i, pos in ipairs(SavedPositions) do
-            table.insert(data, {X = pos.X, Y = pos.Y, Z = pos.Z})
+        for name, recording in pairs(WalkRecordings) do
+            data[name] = {
+                positions = {},
+                timestamps = recording.timestamps
+            }
+            for _, pos in ipairs(recording.positions) do
+                table.insert(data[name].positions, {X = pos.X, Y = pos.Y, Z = pos.Z})
+            end
         end
         local encoded = HttpService:JSONEncode(data)
         writefile(SAVE_FILE_NAME .. ".json", encoded)
@@ -231,7 +244,7 @@ function SaveToFile()
     end)
     
     if success and result then
-        ShowNotification("💾 Saved " .. #SavedPositions .. " positions!", Color3.fromRGB(0, 255, 0))
+        ShowNotification("💾 All recordings saved!", Color3.fromRGB(0, 255, 0))
         return true
     else
         ShowNotification("❌ Save failed!", Color3.fromRGB(255, 50, 50))
@@ -239,7 +252,7 @@ function SaveToFile()
     end
 end
 
-function LoadFromFile()
+function LoadWalkFromFile()
     local success, result = pcall(function()
         if not isfile(SAVE_FILE_NAME .. ".json") then
             return nil
@@ -250,12 +263,19 @@ function LoadFromFile()
     end)
     
     if success and result then
-        SavedPositions = {}
-        for i, pos in ipairs(result) do
-            table.insert(SavedPositions, Vector3.new(pos.X, pos.Y, pos.Z))
+        WalkRecordings = {}
+        for name, recordingData in pairs(result) do
+            local positions = {}
+            for _, pos in ipairs(recordingData.positions) do
+                table.insert(positions, Vector3.new(pos.X, pos.Y, pos.Z))
+            end
+            WalkRecordings[name] = {
+                positions = positions,
+                timestamps = recordingData.timestamps
+            }
         end
-        RefreshTeleportList()
-        ShowNotification("📂 Loaded " .. #SavedPositions .. " positions!", Color3.fromRGB(0, 255, 0))
+        RefreshWalkCPList()
+        ShowNotification("📂 Loaded " .. #WalkRecordings .. " recordings!", Color3.fromRGB(0, 255, 0))
         return true
     elseif not success then
         ShowNotification("❌ Load failed!", Color3.fromRGB(255, 50, 50))
@@ -266,42 +286,17 @@ function LoadFromFile()
     end
 end
 
-local function ParseCoordinates(input)
-    input = input:gsub("%s+", "")
-    
-    local x, y, z
-    
-    if input:find(",") then
-        x, y, z = input:match("^([%-]?%d+%.?%d*),([%-]?%d+%.?%d*),([%-]?%d+%.?%d*)$")
-    elseif input:find(";") then
-        x, y, z = input:match("^([%-]?%d+%.?%d*);([%-]?%d+%.?%d*);([%-]?%d+%.?%d*)$")
-    elseif input:find(":") then
-        x, y, z = input:match("^([%-]?%d+%.?%d*):([%-]?%d+%.?%d*):([%-]?%d+%.?%d*)$")
-    elseif input:find("%s") then
-        x, y, z = input:match("^([%-]?%d+%.?%d*)%s+([%-]?%d+%.?%d*)%s+([%-]?%d+%.?%d*)$")
-    end
-    
-    if x and y and z then
-        x, y, z = tonumber(x), tonumber(y), tonumber(z)
-        if x and y and z then
-            return Vector3.new(x, y, z)
-        end
-    end
-    
-    return nil
-end
-
+-- GUI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CustomGUI"
+ScreenGui.Name = "WalkRecorderGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer.PlayerGui
 
--- Main Frame (Lebih kompak)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -130, 0.5, -210)
+MainFrame.Size = UDim2.new(0, 280, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -140, 0.5, -225)
 MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 MainFrame.BackgroundTransparency = 0.2
 MainFrame.BorderSizePixel = 0
@@ -316,214 +311,159 @@ UICorner.Parent = MainFrame
 -- Title
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 30)
+Title.Position = UDim2.new(0, 20, 0, 5)
 Title.BackgroundTransparency = 1
-Title.Text = "👑  X - V3N0M V1.0"
+Title.Text = "🚶 AUTO WALK RECORDER"
 Title.TextColor3 = Color3.fromRGB(255, 100, 0)
-Title.TextSize = 15
+Title.TextSize = 16
 Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
-
--- Minimize Icon
-local MinimizeIcon = Instance.new("TextButton")
-MinimizeIcon.Name = "MinimizeIcon"
-MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
-MinimizeIcon.Position = UDim2.new(0, 10, 0.5, -27)
-MinimizeIcon.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-MinimizeIcon.BorderSizePixel = 0
-MinimizeIcon.Active = true
-MinimizeIcon.Draggable = true
-MinimizeIcon.Visible = false
-MinimizeIcon.Text = "💀"
-MinimizeIcon.TextSize = 28
-MinimizeIcon.Font = Enum.Font.GothamBold
-MinimizeIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeIcon.Parent = ScreenGui
-
-local IconCorner = Instance.new("UICorner")
-IconCorner.CornerRadius = UDim.new(0, 12)
-IconCorner.Parent = MinimizeIcon
-
-MinimizeIcon.MouseButton1Click:Connect(function()
-    MainFrame.Visible = true
-    MinimizeIcon.Visible = false
-end)
-
-MinimizeIcon.MouseEnter:Connect(function()
-    MinimizeIcon.BackgroundColor3 = Color3.fromRGB(130, 180, 255)
-    MinimizeIcon.Size = UDim2.new(0, 60, 0, 60)
-end)
-
-MinimizeIcon.MouseLeave:Connect(function()
-    MinimizeIcon.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
-    MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
-end)
 
 -- Close Button
 local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 28, 0, 28)
-CloseButton.Position = UDim2.new(1, -33, 0, 5)
+CloseButton.Size = UDim2.new(0, 25, 0, 25)
+CloseButton.Position = UDim2.new(1, -30, 0, 5)
 CloseButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "—"
+CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 18
+CloseButton.TextSize = 14
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.Parent = MainFrame
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 7)
+CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
 
 CloseButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-    MinimizeIcon.Visible = true
-    ShowNotification("🥷 Minimized - Features active!", Color3.fromRGB(100, 150, 255))
+    ScreenGui:Destroy()
 end)
 
-CloseButton.MouseEnter:Connect(function()
-    CloseButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-end)
+-- Tombol Utama (Record/Save, Pause/Lanjutkan, Balik Badan/Normal)
+local MainButtonsFrame = Instance.new("Frame")
+MainButtonsFrame.Size = UDim2.new(1, -20, 0, 120)
+MainButtonsFrame.Position = UDim2.new(0, 10, 0, 40)
+MainButtonsFrame.BackgroundTransparency = 1
+MainButtonsFrame.Parent = MainFrame
 
-CloseButton.MouseLeave:Connect(function()
-    CloseButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-end)
+-- Record/Save Button
+local RecordSaveButton = Instance.new("TextButton")
+RecordSaveButton.Name = "RecordSaveButton"
+RecordSaveButton.Size = UDim2.new(1, 0, 0, 35)
+RecordSaveButton.Position = UDim2.new(0, 0, 0, 0)
+RecordSaveButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+RecordSaveButton.BorderSizePixel = 0
+RecordSaveButton.Text = "🔴 RECORD"
+RecordSaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RecordSaveButton.TextSize = 14
+RecordSaveButton.Font = Enum.Font.GothamBold
+RecordSaveButton.Parent = MainButtonsFrame
 
-local ButtonContainer = Instance.new("Frame")
-ButtonContainer.Size = UDim2.new(1, -20, 0, 90)
-ButtonContainer.Position = UDim2.new(0, 10, 0, 35)
-ButtonContainer.BackgroundTransparency = 1
-ButtonContainer.Parent = MainFrame
+local RecordCorner = Instance.new("UICorner")
+RecordCorner.CornerRadius = UDim.new(0, 8)
+RecordCorner.Parent = RecordSaveButton
 
--- Set Position Button
-local SetPosButton = Instance.new("TextButton")
-SetPosButton.Size = UDim2.new(0.48, 0, 0, 38)
-SetPosButton.Position = UDim2.new(0, 0, 0, 0)
-SetPosButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-SetPosButton.BorderSizePixel = 0
-SetPosButton.Text = "📍 SET POS"
-SetPosButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-SetPosButton.TextSize = 12
-SetPosButton.Font = Enum.Font.GothamBold
-SetPosButton.Parent = ButtonContainer
+-- Pause/Lanjutkan Button
+local PauseResumeButton = Instance.new("TextButton")
+PauseResumeButton.Name = "PauseResumeButton"
+PauseResumeButton.Size = UDim2.new(1, 0, 0, 35)
+PauseResumeButton.Position = UDim2.new(0, 0, 0, 42)
+PauseResumeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+PauseResumeButton.BorderSizePixel = 0
+PauseResumeButton.Text = "⏸️ PAUSE"
+PauseResumeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+PauseResumeButton.TextSize = 14
+PauseResumeButton.Font = Enum.Font.GothamBold
+PauseResumeButton.Parent = MainButtonsFrame
 
-local SetPosCorner = Instance.new("UICorner")
-SetPosCorner.CornerRadius = UDim.new(0, 8)
-SetPosCorner.Parent = SetPosButton
+local PauseCorner = Instance.new("UICorner")
+PauseCorner.CornerRadius = UDim.new(0, 8)
+PauseCorner.Parent = PauseResumeButton
 
--- Save Button
-local SaveButton = Instance.new("TextButton")
-SaveButton.Size = UDim2.new(0.48, 0, 0, 38)
-SaveButton.Position = UDim2.new(0.52, 0, 0, 0)
-SaveButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-SaveButton.BorderSizePixel = 0
-SaveButton.Text = "💾 SAVE"
-SaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-SaveButton.TextSize = 12
-SaveButton.Font = Enum.Font.GothamBold
-SaveButton.Parent = ButtonContainer
+-- Balik Badan/Normal Button
+local ReverseButton = Instance.new("TextButton")
+ReverseButton.Name = "ReverseButton"
+ReverseButton.Size = UDim2.new(1, 0, 0, 35)
+ReverseButton.Position = UDim2.new(0, 0, 0, 84)
+ReverseButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ReverseButton.BorderSizePixel = 0
+ReverseButton.Text = "🔄 BALIK BADAN"
+ReverseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReverseButton.TextSize = 14
+ReverseButton.Font = Enum.Font.GothamBold
+ReverseButton.Parent = MainButtonsFrame
 
-local SaveCorner = Instance.new("UICorner")
-SaveCorner.CornerRadius = UDim.new(0, 8)
-SaveCorner.Parent = SaveButton
+local ReverseCorner = Instance.new("UICorner")
+ReverseCorner.CornerRadius = UDim.new(0, 8)
+ReverseCorner.Parent = ReverseButton
 
--- Load Button
-local LoadButton = Instance.new("TextButton")
-LoadButton.Size = UDim2.new(0.48, 0, 0, 38)
-LoadButton.Position = UDim2.new(0, 0, 0, 47)
-LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-LoadButton.BorderSizePixel = 0
-LoadButton.Text = "📂 LOAD"
-LoadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-LoadButton.TextSize = 12
-LoadButton.Font = Enum.Font.GothamBold
-LoadButton.Parent = ButtonContainer
+-- Save/Load Walk Buttons
+local SaveLoadFrame = Instance.new("Frame")
+SaveLoadFrame.Size = UDim2.new(1, -20, 0, 35)
+SaveLoadFrame.Position = UDim2.new(0, 10, 0, 170)
+SaveLoadFrame.BackgroundTransparency = 1
+SaveLoadFrame.Parent = MainFrame
 
-local LoadCorner = Instance.new("UICorner")
-LoadCorner.CornerRadius = UDim.new(0, 8)
-LoadCorner.Parent = LoadButton
+local SaveWalkButton = Instance.new("TextButton")
+SaveWalkButton.Name = "SaveWalkButton"
+SaveWalkButton.Size = UDim2.new(0.48, 0, 1, 0)
+SaveWalkButton.Position = UDim2.new(0, 0, 0, 0)
+SaveWalkButton.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+SaveWalkButton.BorderSizePixel = 0
+SaveWalkButton.Text = "💾 SAVE WALK"
+SaveWalkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SaveWalkButton.TextSize = 12
+SaveWalkButton.Font = Enum.Font.GothamBold
+SaveWalkButton.Parent = SaveLoadFrame
+
+local SaveWalkCorner = Instance.new("UICorner")
+SaveWalkCorner.CornerRadius = UDim.new(0, 8)
+SaveWalkCorner.Parent = SaveWalkButton
+
+local LoadWalkButton = Instance.new("TextButton")
+LoadWalkButton.Name = "LoadWalkButton"
+LoadWalkButton.Size = UDim2.new(0.48, 0, 1, 0)
+LoadWalkButton.Position = UDim2.new(0.52, 0, 0, 0)
+LoadWalkButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+LoadWalkButton.BorderSizePixel = 0
+LoadWalkButton.Text = "📂 LOAD WALK"
+LoadWalkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+LoadWalkButton.TextSize = 12
+LoadWalkButton.Font = Enum.Font.GothamBold
+LoadWalkButton.Parent = SaveLoadFrame
+
+local LoadWalkCorner = Instance.new("UICorner")
+LoadWalkCorner.CornerRadius = UDim.new(0, 8)
+LoadWalkCorner.Parent = LoadWalkButton
 
 -- Counter Label
-local SaveCounter = Instance.new("TextLabel")
-SaveCounter.Size = UDim2.new(0.48, 0, 0, 38)
-SaveCounter.Position = UDim2.new(0.52, 0, 0, 47)
-SaveCounter.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-SaveCounter.BackgroundTransparency = 0.3
-SaveCounter.BorderSizePixel = 0
-SaveCounter.Text = "0/" .. MAX_SAVES
-SaveCounter.TextColor3 = Color3.fromRGB(255, 255, 255)
-SaveCounter.TextSize = 14
-SaveCounter.Font = Enum.Font.GothamBold
-SaveCounter.Parent = ButtonContainer
+local RecordingCounter = Instance.new("TextLabel")
+RecordingCounter.Size = UDim2.new(1, -20, 0, 25)
+RecordingCounter.Position = UDim2.new(0, 10, 0, 210)
+RecordingCounter.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+RecordingCounter.BackgroundTransparency = 0.3
+RecordingCounter.BorderSizePixel = 0
+RecordingCounter.Text = "Recordings: 0/" .. MAX_RECORDINGS
+RecordingCounter.TextColor3 = Color3.fromRGB(255, 255, 255)
+RecordingCounter.TextSize = 12
+RecordingCounter.Font = Enum.Font.GothamBold
+RecordingCounter.Parent = MainFrame
 
 local CounterCorner = Instance.new("UICorner")
-CounterCorner.CornerRadius = UDim.new(0, 8)
-CounterCorner.Parent = SaveCounter
+CounterCorner.CornerRadius = UDim.new(0, 6)
+CounterCorner.Parent = RecordingCounter
 
-local CoordFrame = Instance.new("Frame")
-CoordFrame.Size = UDim2.new(1, -20, 0, 45)
-CoordFrame.Position = UDim2.new(0, 10, 0, 130)
-CoordFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-CoordFrame.BackgroundTransparency = 0.3
-CoordFrame.BorderSizePixel = 0
-CoordFrame.Parent = MainFrame
-
-local CoordCorner = Instance.new("UICorner")
-CoordCorner.CornerRadius = UDim.new(0, 8)
-CoordCorner.Parent = CoordFrame
-
-local CoordLabel = Instance.new("TextLabel")
-CoordLabel.Size = UDim2.new(1, -10, 0, 15)
-CoordLabel.Position = UDim2.new(0, 5, 0, 2)
-CoordLabel.BackgroundTransparency = 1
-CoordLabel.Text = "📝 Manual Coordinates:"
-CoordLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-CoordLabel.TextSize = 9
-CoordLabel.Font = Enum.Font.GothamBold
-CoordLabel.TextXAlignment = Enum.TextXAlignment.Left
-CoordLabel.Parent = CoordFrame
-
-local CoordInput = Instance.new("TextBox")
-CoordInput.Size = UDim2.new(1, -90, 0, 22)
-CoordInput.Position = UDim2.new(0, 5, 0, 20)
-CoordInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-CoordInput.BorderSizePixel = 0
-CoordInput.PlaceholderText = "X,Y,Z or X;Y;Z"
-CoordInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-CoordInput.Text = ""
-CoordInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-CoordInput.TextSize = 11
-CoordInput.Font = Enum.Font.Gotham
-CoordInput.ClearTextOnFocus = false
-CoordInput.Parent = CoordFrame
-
-local InputCorner = Instance.new("UICorner")
-InputCorner.CornerRadius = UDim.new(0, 6)
-InputCorner.Parent = CoordInput
-
-local AddCoordButton = Instance.new("TextButton")
-AddCoordButton.Size = UDim2.new(0, 80, 0, 22)
-AddCoordButton.Position = UDim2.new(1, -85, 0, 20)
-AddCoordButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-AddCoordButton.BorderSizePixel = 0
-AddCoordButton.Text = "➕ ADD"
-AddCoordButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AddCoordButton.TextSize = 11
-AddCoordButton.Font = Enum.Font.GothamBold
-AddCoordButton.Parent = CoordFrame
-
-local AddCorner = Instance.new("UICorner")
-AddCorner.CornerRadius = UDim.new(0, 6)
-AddCorner.Parent = AddCoordButton
-
+-- Scroll Frame untuk WALK CP buttons
 local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Name = "TeleportList"
-ScrollFrame.Size = UDim2.new(1, -20, 1, -265)
-ScrollFrame.Position = UDim2.new(0, 10, 0, 180)
+ScrollFrame.Name = "WalkCPList"
+ScrollFrame.Size = UDim2.new(1, -20, 1, -300)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 240)
 ScrollFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 ScrollFrame.BackgroundTransparency = 0.4
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 150, 255)
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 100, 0)
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.Parent = MainFrame
 
@@ -533,11 +473,11 @@ ScrollCorner.Parent = ScrollFrame
 
 local ListLayout = Instance.new("UIListLayout")
 ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ListLayout.Padding = UDim.new(0, 4)
+ListLayout.Padding = UDim.new(0, 5)
 ListLayout.Parent = ScrollFrame
 
 ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 8)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
 end)
 
 local EmptyLabel = Instance.new("TextLabel")
@@ -545,155 +485,54 @@ EmptyLabel.Name = "EmptyLabel"
 EmptyLabel.Size = UDim2.new(1, -20, 1, -20)
 EmptyLabel.Position = UDim2.new(0, 10, 0, 10)
 EmptyLabel.BackgroundTransparency = 1
-EmptyLabel.Text = "No saved positions\n\nUse SET POS or\nManual Coordinates!"
+EmptyLabel.Text = "No recordings yet!\n\nClick RECORD to start recording your movement"
 EmptyLabel.TextColor3 = Color3.fromRGB(130, 130, 130)
 EmptyLabel.TextSize = 11
 EmptyLabel.Font = Enum.Font.GothamBold
 EmptyLabel.TextWrapped = true
 EmptyLabel.Parent = ScrollFrame
 
-local InfoPanel = Instance.new("Frame")
-InfoPanel.Size = UDim2.new(1, -20, 0, 50)
-InfoPanel.Position = UDim2.new(0, 10, 1, -60)
-InfoPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-InfoPanel.BackgroundTransparency = 0.3
-InfoPanel.BorderSizePixel = 0
-InfoPanel.Parent = MainFrame
+-- Status Panel
+local StatusPanel = Instance.new("Frame")
+StatusPanel.Size = UDim2.new(1, -20, 0, 45)
+StatusPanel.Position = UDim2.new(0, 10, 1, -55)
+StatusPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+StatusPanel.BackgroundTransparency = 0.3
+StatusPanel.BorderSizePixel = 0
+StatusPanel.Parent = MainFrame
 
-local InfoCorner = Instance.new("UICorner")
-InfoCorner.CornerRadius = UDim.new(0, 8)
-InfoCorner.Parent = InfoPanel
-
-local NoClipText = Instance.new("TextLabel")
-NoClipText.Size = UDim2.new(1, -10, 0, 18)
-NoClipText.Position = UDim2.new(0, 5, 0, 4)
-NoClipText.BackgroundTransparency = 1
-NoClipText.Text = "🔒 NoClip: OFF"
-NoClipText.TextColor3 = Color3.fromRGB(255, 255, 255)
-NoClipText.TextSize = 10
-NoClipText.Font = Enum.Font.GothamBold
-NoClipText.TextXAlignment = Enum.TextXAlignment.Left
-NoClipText.Parent = InfoPanel
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 8)
+StatusCorner.Parent = StatusPanel
 
 local StatusText = Instance.new("TextLabel")
-StatusText.Size = UDim2.new(1, -10, 0, 16)
-StatusText.Position = UDim2.new(0, 5, 0, 20)
+StatusText.Size = UDim2.new(1, -10, 0, 20)
+StatusText.Position = UDim2.new(0, 5, 0, 3)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "✓ Status: Ready"
+StatusText.Text = "📊 Status: Ready"
 StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
-StatusText.TextSize = 9
+StatusText.TextSize = 11
 StatusText.Font = Enum.Font.GothamBold
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
-StatusText.Parent = InfoPanel
+StatusText.Parent = StatusPanel
 
-local VersionText = Instance.new("TextLabel")
-VersionText.Size = UDim2.new(1, -10, 0, 12)
-VersionText.Position = UDim2.new(0, 5, 0, 36)
-VersionText.BackgroundTransparency = 1
-VersionText.Text = "v6.0 | Manual Coords + Save/Load"
-VersionText.TextColor3 = Color3.fromRGB(100, 150, 255)
-VersionText.TextSize = 7
-VersionText.Font = Enum.Font.GothamBold
-VersionText.TextXAlignment = Enum.TextXAlignment.Left
-VersionText.Parent = InfoPanel
+local OrientationText = Instance.new("TextLabel")
+OrientationText.Size = UDim2.new(1, -10, 0, 18)
+OrientationText.Position = UDim2.new(0, 5, 0, 22)
+OrientationText.BackgroundTransparency = 1
+OrientationText.Text = "🧭 Orientation: Normal"
+OrientationText.TextColor3 = Color3.fromRGB(255, 255, 255)
+OrientationText.TextSize = 9
+OrientationText.Font = Enum.Font.GothamBold
+OrientationText.TextXAlignment = Enum.TextXAlignment.Left
+OrientationText.Parent = StatusPanel
 
-local function ShowDeleteConfirm(index, position, callback)
-    local ConfirmFrame = Instance.new("Frame")
-    ConfirmFrame.Name = "ConfirmDelete"
-    ConfirmFrame.Size = UDim2.new(0, 240, 0, 120)
-    ConfirmFrame.Position = UDim2.new(0.5, -120, 0.5, -60)
-    ConfirmFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    ConfirmFrame.BorderSizePixel = 0
-    ConfirmFrame.ZIndex = 10
-    ConfirmFrame.Parent = ScreenGui
-    
-    local ConfirmCorner = Instance.new("UICorner")
-    ConfirmCorner.CornerRadius = UDim.new(0, 10)
-    ConfirmCorner.Parent = ConfirmFrame
-    
-    local ConfirmTitle = Instance.new("TextLabel")
-    ConfirmTitle.Size = UDim2.new(1, -20, 0, 25)
-    ConfirmTitle.Position = UDim2.new(0, 10, 0, 10)
-    ConfirmTitle.BackgroundTransparency = 1
-    ConfirmTitle.Text = "⚠️ Confirm Delete"
-    ConfirmTitle.TextColor3 = Color3.fromRGB(255, 200, 0)
-    ConfirmTitle.TextSize = 14
-    ConfirmTitle.Font = Enum.Font.GothamBold
-    ConfirmTitle.Parent = ConfirmFrame
-    
-    local ConfirmText = Instance.new("TextLabel")
-    ConfirmText.Size = UDim2.new(1, -20, 0, 35)
-    ConfirmText.Position = UDim2.new(0, 10, 0, 35)
-    ConfirmText.BackgroundTransparency = 1
-    ConfirmText.Text = "Delete TP SAVE " .. index .. "?\n" .. string.format("X:%.0f Y:%.0f Z:%.0f", position.X, position.Y, position.Z)
-    ConfirmText.TextColor3 = Color3.fromRGB(200, 200, 200)
-    ConfirmText.TextSize = 10
-    ConfirmText.Font = Enum.Font.Gotham
-    ConfirmText.TextWrapped = true
-    ConfirmText.Parent = ConfirmFrame
-    
-    local YesButton = Instance.new("TextButton")
-    YesButton.Size = UDim2.new(0.45, 0, 0, 35)
-    YesButton.Position = UDim2.new(0.05, 0, 0, 75)
-    YesButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-    YesButton.BorderSizePixel = 0
-    YesButton.Text = "✓ YES"
-    YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    YesButton.TextSize = 12
-    YesButton.Font = Enum.Font.GothamBold
-    YesButton.Parent = ConfirmFrame
-    
-    local YesCorner = Instance.new("UICorner")
-    YesCorner.CornerRadius = UDim.new(0, 8)
-    YesCorner.Parent = YesButton
-    
-    local NoButton = Instance.new("TextButton")
-    NoButton.Size = UDim2.new(0.45, 0, 0, 35)
-    NoButton.Position = UDim2.new(0.5, 0, 0, 75)
-    NoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    NoButton.BorderSizePixel = 0
-    NoButton.Text = "✗ NO"
-    NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    NoButton.TextSize = 12
-    NoButton.Font = Enum.Font.GothamBold
-    NoButton.Parent = ConfirmFrame
-    
-    local NoCorner = Instance.new("UICorner")
-    NoCorner.CornerRadius = UDim.new(0, 8)
-    NoCorner.Parent = NoButton
-    
-    YesButton.MouseButton1Click:Connect(function()
-        callback(true)
-        ConfirmFrame:Destroy()
-    end)
-    
-    NoButton.MouseButton1Click:Connect(function()
-        callback(false)
-        ConfirmFrame:Destroy()
-    end)
-    
-    YesButton.MouseEnter:Connect(function()
-        YesButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-    end)
-    
-    YesButton.MouseLeave:Connect(function()
-        YesButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-    end)
-    
-    NoButton.MouseEnter:Connect(function()
-        NoButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    end)
-    
-    NoButton.MouseLeave:Connect(function()
-        NoButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    end)
-end
-
-local function CreateTeleportButton(index, position)
+-- Fungsi untuk membuat tombol WALK CP
+local function CreateWalkCPButton(recordingName, recordingData)
     local Button = Instance.new("TextButton")
-    Button.Name = "TPSave" .. index
-    Button.Size = UDim2.new(1, -8, 0, 45)
-    Button.BackgroundColor3 = Color3.fromRGB(50, 100, 150)
+    Button.Name = recordingName
+    Button.Size = UDim2.new(1, -8, 0, 50)
+    Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
     Button.BorderSizePixel = 0
     Button.AutoButtonColor = false
     Button.Text = ""
@@ -704,79 +543,65 @@ local function CreateTeleportButton(index, position)
     BtnCorner.Parent = Button
     
     local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Size = UDim2.new(1, -45, 0, 18)
-    TitleLabel.Position = UDim2.new(0, 5, 0, 3)
+    TitleLabel.Size = UDim2.new(1, -10, 0, 20)
+    TitleLabel.Position = UDim2.new(0, 5, 0, 5)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = "📌 TP SAVE " .. index
+    TitleLabel.Text = "🚶 " .. recordingName
     TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TitleLabel.TextSize = 11
+    TitleLabel.TextSize = 12
     TitleLabel.Font = Enum.Font.GothamBold
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = Button
     
-    local PosLabel = Instance.new("TextLabel")
-    PosLabel.Size = UDim2.new(1, -45, 0, 20)
-    PosLabel.Position = UDim2.new(0, 5, 0, 22)
-    PosLabel.BackgroundTransparency = 1
-    PosLabel.Text = string.format("X:%.0f Y:%.0f Z:%.0f", position.X, position.Y, position.Z)
-    PosLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    PosLabel.TextSize = 8
-    PosLabel.Font = Enum.Font.Gotham
-    PosLabel.TextXAlignment = Enum.TextXAlignment.Left
-    PosLabel.Parent = Button
+    local InfoLabel = Instance.new("TextLabel")
+    InfoLabel.Size = UDim2.new(1, -10, 0, 15)
+    InfoLabel.Position = UDim2.new(0, 5, 0, 25)
+    InfoLabel.BackgroundTransparency = 1
+    InfoLabel.Text = string.format("Points: %d | Duration: %.1fs", 
+        #recordingData.positions, 
+        recordingData.timestamps[#recordingData.timestamps] or 0)
+    InfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    InfoLabel.TextSize = 9
+    InfoLabel.Font = Enum.Font.Gotham
+    InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+    InfoLabel.Parent = Button
     
     local DeleteBtn = Instance.new("TextButton")
-    DeleteBtn.Size = UDim2.new(0, 32, 0, 32)
-    DeleteBtn.Position = UDim2.new(1, -37, 0, 6.5)
+    DeleteBtn.Size = UDim2.new(0, 25, 0, 25)
+    DeleteBtn.Position = UDim2.new(1, -30, 0, 12.5)
     DeleteBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
     DeleteBtn.BorderSizePixel = 0
     DeleteBtn.Text = "🗑️"
     DeleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    DeleteBtn.TextSize = 14
+    DeleteBtn.TextSize = 12
     DeleteBtn.Font = Enum.Font.GothamBold
     DeleteBtn.Parent = Button
     
     local DelCorner = Instance.new("UICorner")
-    DelCorner.CornerRadius = UDim.new(0, 7)
+    DelCorner.CornerRadius = UDim.new(0, 6)
     DelCorner.Parent = DeleteBtn
     
+    -- Event handlers
     Button.MouseButton1Click:Connect(function()
-        if IsTeleporting then
-            ShowNotification("⏳ Please wait...", Color3.fromRGB(255, 100, 0))
-            return
+        if IsPlaying then
+            StopPlayback()
+            wait(0.1)
         end
-        
-        ShowNotification("🥷 Teleporting to Save " .. index .. "...", Color3.fromRGB(100, 150, 255))
-        
-        spawn(function()
-            local success, msg = STEALTH_TELEPORT(position)
-            
-            if success then
-                ShowNotification("✓ Arrived at Save " .. index .. "!", Color3.fromRGB(0, 255, 0))
-            else
-                ShowNotification("❌ Failed: " .. msg, Color3.fromRGB(255, 50, 50))
-            end
-        end)
+        PlayWalkRecording(recordingName)
     end)
     
     DeleteBtn.MouseButton1Click:Connect(function()
-        ShowDeleteConfirm(index, position, function(confirmed)
-            if confirmed then
-                table.remove(SavedPositions, index)
-                RefreshTeleportList()
-                ShowNotification("🗑️ Save " .. index .. " deleted!", Color3.fromRGB(255, 100, 0))
-            else
-                ShowNotification("❌ Delete cancelled", Color3.fromRGB(200, 200, 200))
-            end
-        end)
+        WalkRecordings[recordingName] = nil
+        RefreshWalkCPList()
+        ShowNotification("🗑️ Deleted: " .. recordingName, Color3.fromRGB(255, 100, 0))
     end)
     
     Button.MouseEnter:Connect(function()
-        Button.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+        Button.BackgroundColor3 = Color3.fromRGB(255, 120, 20)
     end)
     
     Button.MouseLeave:Connect(function()
-        Button.BackgroundColor3 = Color3.fromRGB(50, 100, 150)
+        Button.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
     end)
     
     DeleteBtn.MouseEnter:Connect(function()
@@ -790,141 +615,100 @@ local function CreateTeleportButton(index, position)
     return Button
 end
 
-function RefreshTeleportList()
+-- Fungsi refresh list WALK CP
+function RefreshWalkCPList()
     for _, child in pairs(ScrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
     
-    SaveCounter.Text = #SavedPositions .. "/" .. MAX_SAVES
+    local recordingCount = 0
+    for name, recording in pairs(WalkRecordings) do
+        recordingCount = recordingCount + 1
+        CreateWalkCPButton(name, recording)
+    end
     
-    if #SavedPositions == 0 then
+    RecordingCounter.Text = "Recordings: " .. recordingCount .. "/" .. MAX_RECORDINGS
+    
+    if recordingCount == 0 then
         EmptyLabel.Visible = true
     else
         EmptyLabel.Visible = false
-        
-        for i, pos in ipairs(SavedPositions) do
-            CreateTeleportButton(i, pos)
-        end
     end
 end
 
-SetPosButton.MouseButton1Click:Connect(function()
-    if not HumanoidRootPart then return end
-    
-    if #SavedPositions >= MAX_SAVES then
-        ShowNotification("❌ Maximum " .. MAX_SAVES .. " saves reached!", Color3.fromRGB(255, 50, 50))
-        return
-    end
-    
-    local currentPos = HumanoidRootPart.Position
-    table.insert(SavedPositions, currentPos)
-    
-    RefreshTeleportList()
-    
-    SetPosButton.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
-    ShowNotification("📍 Position " .. #SavedPositions .. " saved!", Color3.fromRGB(0, 255, 0))
-    
-    wait(1)
-    SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-end)
-
-SetPosButton.MouseEnter:Connect(function()
-    if #SavedPositions < MAX_SAVES then
-        SetPosButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-    end
-end)
-
-SetPosButton.MouseLeave:Connect(function()
-    SetPosButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-end)
-
-SaveButton.MouseButton1Click:Connect(function()
-    if #SavedPositions == 0 then
-        ShowNotification("❌ No positions to save!", Color3.fromRGB(255, 50, 50))
-        return
-    end
-    
-    SaveButton.BackgroundColor3 = Color3.fromRGB(0, 155, 0)
-    SaveToFile()
-    wait(1)
-    SaveButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-end)
-
-SaveButton.MouseEnter:Connect(function()
-    SaveButton.BackgroundColor3 = Color3.fromRGB(0, 130, 0)
-end)
-
-SaveButton.MouseLeave:Connect(function()
-    SaveButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-end)
-
-LoadButton.MouseButton1Click:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-    LoadFromFile()
-    wait(1)
-    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-end)
-
-LoadButton.MouseEnter:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-end)
-
-LoadButton.MouseLeave:Connect(function()
-    LoadButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-end)
-
-AddCoordButton.MouseButton1Click:Connect(function()
-    local input = CoordInput.Text
-    
-    if input == "" then
-        ShowNotification("❌ Please enter coordinates!", Color3.fromRGB(255, 50, 50))
-        return
-    end
-    
-    if #SavedPositions >= MAX_SAVES then
-        ShowNotification("❌ Maximum " .. MAX_SAVES .. " saves reached!", Color3.fromRGB(255, 50, 50))
-        return
-    end
-    
-    local pos = ParseCoordinates(input)
-    
-    if pos then
-        table.insert(SavedPositions, pos)
-        RefreshTeleportList()
-        
-        AddCoordButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-        ShowNotification("✓ Position " .. #SavedPositions .. " added!", Color3.fromRGB(0, 255, 0))
-        CoordInput.Text = ""
-        
-        wait(1)
-        AddCoordButton.BackgroundColor3 = Color3.fromRGB(0, 139, 0)
+-- Event handlers untuk tombol utama
+RecordSaveButton.MouseButton1Click:Connect(function()
+    if not IsRecording then
+        -- Mulai recording
+        StartRecording()
+        RecordSaveButton.Text = "💾 SAVE"
+        RecordSaveButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
     else
-        ShowNotification("❌ Invalid format!\nUse: X,Y,Z or X;Y;Z\nExample: 100,50,200", Color3.fromRGB(255, 50, 50))
+        -- Stop dan save recording
+        StopRecording()
+        RecordSaveButton.Text = "🔴 RECORD"
+        RecordSaveButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
     end
 end)
 
-AddCoordButton.MouseEnter:Connect(function()
-    AddCoordButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-end)
-
-AddCoordButton.MouseLeave:Connect(function()
-    AddCoordButton.BackgroundColor3 = Color3.fromRGB(0, 139, 0)
-end)
-
-CoordInput.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        AddCoordButton.MouseButton1Click:Fire()
+PauseResumeButton.MouseButton1Click:Connect(function()
+    if IsPlaying then
+        TogglePause()
+        if IsPaused then
+            PauseResumeButton.Text = "▶️ LANJUTKAN"
+            PauseResumeButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        else
+            PauseResumeButton.Text = "⏸️ PAUSE"
+            PauseResumeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        end
+    else
+        ShowNotification("❌ No playback active!", Color3.fromRGB(255, 50, 50))
     end
 end)
 
+ReverseButton.MouseButton1Click:Connect(function()
+    ReverseOrientation = not ReverseOrientation
+    if ReverseOrientation then
+        ReverseButton.Text = "🔄 NORMAL"
+        ReverseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        OrientationText.Text = "🧭 Orientation: Reversed"
+        ShowNotification("🔄 Orientation: REVERSED", Color3.fromRGB(255, 100, 0))
+    else
+        ReverseButton.Text = "🔄 BALIK BADAN"
+        ReverseButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        OrientationText.Text = "🧭 Orientation: Normal"
+        ShowNotification("🧭 Orientation: NORMAL", Color3.fromRGB(0, 255, 0))
+    end
+end)
+
+SaveWalkButton.MouseButton1Click:Connect(function()
+    if next(WalkRecordings) == nil then
+        ShowNotification("❌ No recordings to save!", Color3.fromRGB(255, 50, 50))
+        return
+    end
+    
+    SaveWalkButton.BackgroundColor3 = Color3.fromRGB(0, 80, 160)
+    SaveWalkToFile()
+    wait(0.5)
+    SaveWalkButton.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+end)
+
+LoadWalkButton.MouseButton1Click:Connect(function()
+    LoadWalkButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+    LoadWalkFromFile()
+    wait(0.5)
+    LoadWalkButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+end)
+
+-- Fungsi notification
 function ShowNotification(text, color)
     color = color or Color3.fromRGB(0, 155, 0)
     
     local NotifFrame = Instance.new("Frame")
-    NotifFrame.Size = UDim2.new(0, 260, 0, 50)
-    NotifFrame.Position = UDim2.new(0.5, -130, 0, -60)
+    NotifFrame.Size = UDim2.new(0, 280, 0, 60)
+    NotifFrame.Position = UDim2.new(0.5, -140, 0, -70)
     NotifFrame.BackgroundColor3 = color
     NotifFrame.BorderSizePixel = 0
     NotifFrame.ZIndex = 5
@@ -940,90 +724,79 @@ function ShowNotification(text, color)
     NotifText.BackgroundTransparency = 1
     NotifText.Text = text
     NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    NotifText.TextSize = 11
+    NotifText.TextSize = 12
     NotifText.Font = Enum.Font.GothamBold
     NotifText.TextWrapped = true
     NotifText.Parent = NotifFrame
     
-    NotifFrame:TweenPosition(UDim2.new(0.5, -130, 0, 10), "Out", "Quad", 0.3, true)
+    NotifFrame:TweenPosition(UDim2.new(0.5, -140, 0, 10), "Out", "Quad", 0.3, true)
     
     spawn(function()
-        wait(2.5)
-        NotifFrame:TweenPosition(UDim2.new(0.5, -130, 0, -60), "In", "Quad", 0.3, true)
+        wait(3)
+        NotifFrame:TweenPosition(UDim2.new(0.5, -140, 0, -70), "In", "Quad", 0.3, true)
         wait(0.3)
         NotifFrame:Destroy()
     end)
 end
 
+-- Update status secara real-time
 spawn(function()
-    while wait(0.3) do
-        if NoClipConnection then
-            NoClipText.Text = "🔓 NoClip: ON"
-            NoClipText.TextColor3 = Color3.fromRGB(0, 255, 100)
+    while wait(0.5) do
+        if IsRecording then
+            StatusText.Text = "📊 Status: Recording..."
+            StatusText.TextColor3 = Color3.fromRGB(255, 0, 0)
+        elseif IsPlaying then
+            if IsPaused then
+                StatusText.Text = "📊 Status: Playback Paused"
+                StatusText.TextColor3 = Color3.fromRGB(255, 200, 0)
+            else
+                StatusText.Text = "📊 Status: Playing Back"
+                StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+            end
         else
-            NoClipText.Text = "🔒 NoClip: OFF"
-            NoClipText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end
-        
-        if IsTeleporting then
-            StatusText.Text = "⚡ Status: Teleporting..."
-            StatusText.TextColor3 = Color3.fromRGB(100, 150, 255)
-        elseif PositionLockConnection then
-            StatusText.Text = "🔐 Status: Locked (5s)"
-            StatusText.TextColor3 = Color3.fromRGB(255, 200, 0)
-        elseif PlayerIsMoving then
-            StatusText.Text = "🏃 Status: Moving"
-            StatusText.TextColor3 = Color3.fromRGB(0, 255, 100)
-        else
-            StatusText.Text = "✓ Status: Ready"
+            StatusText.Text = "📊 Status: Ready"
             StatusText.TextColor3 = Color3.fromRGB(0, 255, 0)
         end
     end
 end)
 
+-- Cleanup saat karakter berubah
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart", 10)
     Humanoid = newChar:WaitForChild("Humanoid", 10)
-    UnlockPosition()
-    DisableNoClip()
-    IsTeleporting = false
-    PlayerIsMoving = false
+    StopPlayback()
+    if IsRecording then
+        StopRecording()
+        RecordSaveButton.Text = "🔴 RECORD"
+        RecordSaveButton.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+    end
 end)
 
+-- Auto-load saat start
 spawn(function()
-    wait(0.5)
-    ShowNotification("🥷 STEALTH TP v6.0 LOADED!\n📍 Manual Coords + Save/Load", Color3.fromRGB(100, 150, 255))
-    
-    -- Auto-load jika ada file save
+    wait(1)
     if isfile and isfile(SAVE_FILE_NAME .. ".json") then
-        wait(1)
-        ShowNotification("📂 Auto-loading saved positions...", Color3.fromRGB(0, 150, 255))
-        wait(0.5)
-        LoadFromFile()
+        ShowNotification("📂 Auto-loading recordings...", Color3.fromRGB(0, 150, 255))
+        LoadWalkFromFile()
     end
 end)
 
 print("============================================")
-print("🥷 STEALTH TELEPORT v6.0 LOADED!")
+print("🚶 AUTO WALK RECORDER LOADED!")
 print("============================================")
-print("✓ Manual Coordinates Input")
-print("✓ Save/Load System (Persistent)")
-print("✓ Delete Confirmation")
-print("✓ Up to 20 saves")
-print("✓ Compact UI")
+print("✓ Record & Playback System")
+print("✓ Pause/Resume Functionality") 
+print("✓ Reverse Orientation Mode")
+print("✓ Save/Load All Recordings")
+print("✓ Up to 20 walk recordings")
 print("============================================")
 print("📝 HOW TO USE:")
-print("1. SET POS - Save current position")
-print("2. Manual Input - Type X,Y,Z and click ADD")
-print("3. SAVE - Save all positions to file")
-print("4. LOAD - Load positions from file")
-print("5. Click TP button to teleport")
-print("6. Click 🗑️ to delete (with confirmation)")
-print("============================================")
-print("📌 COORDINATE FORMATS:")
-print("   • X,Y,Z  (comma)")
-print("   • X;Y;Z  (semicolon)")
-print("   • X:Y:Z  (colon)")
-print("   Example: 100,50,200")
+print("1. RECORD - Start recording movement")
+print("2. SAVE - Stop and save as WALK CP")
+print("3. Click WALK CP button to play back")
+print("4. PAUSE - Pause/resume playback")
+print("5. BALIK BADAN - Reverse orientation")
+print("6. SAVE WALK - Save all to file")
+print("7. LOAD WALK - Load from file")
 print("============================================")
