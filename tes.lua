@@ -175,18 +175,18 @@ function PlayWalkRecording(recordingName)
         end
         
         -- Terapkan posisi dengan orientasi
-        if targetPos then
-            local currentCFrame = HumanoidRootPart.CFrame
-            local lookDirection = (targetPos - currentCFrame.Position).Unit
-            
-            if ReverseOrientation then
-                -- Balik orientasi
-                HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos - lookDirection)
-            else
-                -- Orientasi normal
-                HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos + lookDirection)
-            end
-        end
+if targetPos then
+    local currentCFrame = HumanoidRootPart.CFrame
+    local lookDirection = (targetPos - currentCFrame.Position).Unit
+
+    if ReverseOrientation then
+        -- Balik orientasi
+        HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos - lookDirection)
+    else
+        -- Orientasi normal
+        HumanoidRootPart.CFrame = CFrame.new(targetPos, targetPos + lookDirection)
+    end
+end
     end)
 end
 
@@ -293,6 +293,37 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer.PlayerGui
 
+-- Minimize Icon
+local MinimizeIcon = Instance.new("ImageButton")
+MinimizeIcon.Name = "MinimizeIcon"
+MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
+MinimizeIcon.Position = UDim2.new(0, 10, 0, 10)
+MinimizeIcon.BackgroundTransparency = 1
+MinimizeIcon.BorderSizePixel = 0
+MinimizeIcon.Active = true
+MinimizeIcon.Draggable = true
+MinimizeIcon.Visible = false
+MinimizeIcon.Image = "rbxassetid://110225912398772"
+MinimizeIcon.ScaleType = Enum.ScaleType.Fit
+MinimizeIcon.Parent = ScreenGui
+
+local IconCorner = Instance.new("UICorner")
+IconCorner.CornerRadius = UDim.new(0, 10)
+IconCorner.Parent = MinimizeIcon
+
+MinimizeIcon.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    MinimizeIcon.Visible = false
+end)
+
+MinimizeIcon.MouseEnter:Connect(function()
+    MinimizeIcon.Size = UDim2.new(0, 55, 0, 55)
+end)
+
+MinimizeIcon.MouseLeave:Connect(function()
+    MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
+end)
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 280, 0, 450)
@@ -320,25 +351,31 @@ Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
--- Close Button
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 25, 0, 25)
-CloseButton.Position = UDim2.new(1, -30, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
-CloseButton.BorderSizePixel = 0
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 14
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = MainFrame
+-- Minimize Button
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Size = UDim2.new(0, 28, 0, 28)
+MinimizeButton.Position = UDim2.new(1, -33, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(139, 0, 0)
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Text = "—"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.TextSize = 18
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Parent = MainFrame
+
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(0, 7)
+MinimizeCorner.Parent = MinimizeButton
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    MinimizeIcon.Visible = true
+    ShowNotification("⚡ Minimized - Auto Walk Recorder Active!", Color3.fromRGB(255, 100, 0))
+end)
 
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
-
-CloseButton.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
 
 -- Tombol Utama (Record/Save, Pause/Lanjutkan, Balik Badan/Normal)
 local MainButtonsFrame = Instance.new("Frame")
@@ -670,16 +707,29 @@ end)
 
 ReverseButton.MouseButton1Click:Connect(function()
     ReverseOrientation = not ReverseOrientation
+    
     if ReverseOrientation then
         ReverseButton.Text = "🔄 NORMAL"
         ReverseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
         OrientationText.Text = "🧭 Orientation: Reversed"
         ShowNotification("🔄 Orientation: REVERSED", Color3.fromRGB(255, 100, 0))
+        
+        -- Balik badan karakter langsung
+        if HumanoidRootPart then
+            local currentCF = HumanoidRootPart.CFrame
+            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position - currentCF.LookVector)
+        end
     else
         ReverseButton.Text = "🔄 BALIK BADAN"
         ReverseButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         OrientationText.Text = "🧭 Orientation: Normal"
         ShowNotification("🧭 Orientation: NORMAL", Color3.fromRGB(0, 255, 0))
+        
+        -- Kembalikan orientasi normal
+        if HumanoidRootPart then
+            local currentCF = HumanoidRootPart.CFrame
+            HumanoidRootPart.CFrame = CFrame.new(currentCF.Position, currentCF.Position + currentCF.LookVector)
+        end
     end
 end)
 
