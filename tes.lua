@@ -1,27 +1,28 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
-local isLockedBack = false
+local isReverseMode = false
 local connection = nil
 
 -- Hapus GUI lama jika ada
-if player.PlayerGui:FindFirstChild("LockBackGUI") then
-    player.PlayerGui:FindFirstChild("LockBackGUI"):Destroy()
+if player.PlayerGui:FindFirstChild("ReverseShiftLockGUI") then
+    player.PlayerGui:FindFirstChild("ReverseShiftLockGUI"):Destroy()
 end
 
 -- Buat GUI sederhana
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "LockBackGUI"
+ScreenGui.Name = "ReverseShiftLockGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = player.PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 200, 0, 80)
+MainFrame.Size = UDim2.new(0, 220, 0, 80)
 MainFrame.Position = UDim2.new(0, 10, 0, 10)
 MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 MainFrame.BackgroundTransparency = 0.3
@@ -32,22 +33,12 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 10)
 UICorner.Parent = MainFrame
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Position = UDim2.new(0, 0, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "🔁 PUTAR BADAN"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
-Title.Font = Enum.Font.GothamBold
-Title.Parent = MainFrame
-
 local LockButton = Instance.new("TextButton")
-LockButton.Size = UDim2.new(0.8, 0, 0, 35)
-LockButton.Position = UDim2.new(0.1, 0, 0, 35)
+LockButton.Size = UDim2.new(0.9, 0, 0, 40)
+LockButton.Position = UDim2.new(0.05, 0, 0.2, 0)
 LockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 LockButton.BorderSizePixel = 0
-LockButton.Text = "🔓 AKTIFKAN PUTAR BADAN"
+LockButton.Text = "🔄 SHIFT LOCK BELAKANG"
 LockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 LockButton.TextSize = 12
 LockButton.Font = Enum.Font.GothamBold
@@ -57,66 +48,88 @@ local ButtonCorner = Instance.new("UICorner")
 ButtonCorner.CornerRadius = UDim.new(0, 8)
 ButtonCorner.Parent = LockButton
 
--- Fungsi untuk lock menghadap belakang
-local function lockToBack()
+-- Simpan orientasi asli
+local originalAutoRotate = humanoid.AutoRotate
+
+-- Fungsi untuk reverse shift lock
+local function enableReverseShiftLock()
     if not rootPart then return end
     
-    -- Putar badan 180 derajat
-    rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position - rootPart.CFrame.LookVector)
-    
-    -- Nonaktifkan auto rotate humanoid
+    -- Nonaktifkan auto rotate
     humanoid.AutoRotate = false
+    
+    -- Putar karakter 180 derajat
+    rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position - rootPart.CFrame.LookVector)
 end
 
--- Fungsi untuk unlock
-local function unlockFromBack()
+-- Fungsi untuk disable reverse
+local function disableReverseShiftLock()
     if not rootPart then return end
     
-    -- Aktifkan kembali auto rotate
-    humanoid.AutoRotate = true
-    
-    -- Hentikan connection
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
+    -- Kembalikan auto rotate ke settingan asli
+    humanoid.AutoRotate = originalAutoRotate
 end
 
--- Fungsi untuk maintain orientasi ke belakang
-local function maintainBackOrientation()
-    if not rootPart or not isLockedBack then return end
+-- Fungsi untuk maintain reverse orientation dengan smooth
+local function maintainReverseOrientation()
+    if not rootPart or not isReverseMode then return end
     
-    -- Terus pertahankan menghadap belakang
-    local currentLook = rootPart.CFrame.LookVector
-    rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position - currentLook)
+    -- Dapatkan arah camera
+    local camera = workspace.CurrentCamera
+    local cameraCFrame = camera.CFrame
+    local cameraLookVector = cameraCFrame.LookVector
+    
+    -- Reverse arah camera (180 derajat)
+    local reverseLookVector = -cameraLookVector
+    
+    -- Terapkan orientasi reverse ke karakter
+    rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + Vector3.new(reverseLookVector.X, 0, reverseLookVector.Z))
 end
 
--- Toggle lock back
+-- Toggle reverse shift lock
 LockButton.MouseButton1Click:Connect(function()
-    isLockedBack = not isLockedBack
+    isReverseMode = not isReverseMode
     
-    if isLockedBack then
-        -- AKTIF
-        LockButton.Text = "🔒 PUTAR BADAN AKTIF"
+    if isReverseMode then
+        -- AKTIFKAN REVERSE MODE
+        LockButton.Text = "🔒 SHIFT LOCK BELAKANG AKTIF"
         LockButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
         
-        lockToBack()
+        enableReverseShiftLock()
         
-        -- Jalankan maintain orientation
+        -- Jalankan maintain orientation dengan smooth
         connection = RunService.Heartbeat:Connect(function()
-            maintainBackOrientation()
+            maintainReverseOrientation()
         end)
         
-        print("🔒 PUTAR BADAN: AKTIF - Karakter terkunci menghadap belakang")
+        print("🔒 SHIFT LOCK BELAKANG: AKTIF")
         
     else
-        -- NONAKTIF
-        LockButton.Text = "🔓 AKTIFKAN PUTAR BADAN"
+        -- NONAKTIFKAN REVERSE MODE
+        LockButton.Text = "🔄 SHIFT LOCK BELAKANG"
         LockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         
-        unlockFromBack()
+        disableReverseShiftLock()
         
-        print("🔓 PUTAR BADAN: NONAKTIF - Karakter normal")
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        
+        print("🔓 SHIFT LOCK BELAKANG: NONAKTIF")
+    end
+end)
+
+-- Handle input untuk prevent conflict dengan shift lock original
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
+        -- Biarkan shift lock original bekerja
+        wait(0.1) -- Kasih delay sedikit
+        if isReverseMode then
+            maintainReverseOrientation()
+        end
     end
 end)
 
@@ -125,14 +138,19 @@ player.CharacterAdded:Connect(function(newChar)
     character = newChar
     humanoid = newChar:WaitForChild("Humanoid")
     rootPart = newChar:WaitForChild("HumanoidRootPart")
+    originalAutoRotate = humanoid.AutoRotate
     
     -- Reset state ketika ganti karakter
-    isLockedBack = false
-    LockButton.Text = "🔓 AKTIFKAN PUTAR BADAN"
+    isReverseMode = false
+    LockButton.Text = "🔄 SHIFT LOCK BELAKANG"
     LockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    unlockFromBack()
+    
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
 end)
 
-print("🔁 SCRIPT PUTAR BADAN LOADED!")
-print("Fitur: Tekan tombol untuk mengunci karakter menghadap belakang")
-print("Karakter akan tetap menghadap belakang meskipun analog digerakkan!")
+print("🔄 SHIFT LOCK BELAKANG LOADED!")
+print("Fitur: Shift Lock versi berlawanan arah")
+print("Tekan tombol untuk mengaktifkan/menonaktifkan")
