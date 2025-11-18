@@ -4,7 +4,6 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 
--- Hapus GUI lama jika ada
 if LocalPlayer.PlayerGui:FindFirstChild("WalkRecorderGUI") then
     LocalPlayer.PlayerGui:FindFirstChild("WalkRecorderGUI"):Destroy()
 end
@@ -18,7 +17,6 @@ if not HumanoidRootPart or not Humanoid then
     return
 end
 
--- Variabel sistem Auto Walk Recorder
 local WalkRecordings = {}
 local CurrentRecording = nil
 local IsRecording = false
@@ -34,15 +32,11 @@ local CurrentState = "Idle"
 local StateDetectionConnection = nil
 local CurrentAnimTrack = nil
 
--- Animasi custom (ganti dengan animation ID kamu)
 local CUSTOM_ANIMATIONS = {
-    -- Basic Movements
     Walk = "rbxassetid://4845126998",
     Run = "rbxassetid://4845126998", 
     Idle = "rbxassetid://6161589299",
     Jump = "rbxassetid://6312531221",
-    
-    -- Advanced Movements
     Swim = "rbxassetid://6161658570",
     SwimIdle = "rbxassetid://6161660330",
     Climb = "rbxassetid://6161557492", 
@@ -51,7 +45,6 @@ local CUSTOM_ANIMATIONS = {
     Land = "rbxassetid://6161660330"
 }
 
--- Load animasi
 local AnimationTracks = {}
 local function LoadAnimations()
     for animName, animId in pairs(CUSTOM_ANIMATIONS) do
@@ -63,14 +56,12 @@ end
 
 LoadAnimations()
 
--- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "WalkRecorderGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer.PlayerGui
 
--- Minimize Icon
 local MinimizeIcon = Instance.new("ImageButton")
 MinimizeIcon.Name = "MinimizeIcon"
 MinimizeIcon.Size = UDim2.new(0, 50, 0, 50)
@@ -103,7 +94,6 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 12)
 UICorner.Parent = MainFrame
 
--- Title
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 30)
 Title.Position = UDim2.new(0, 20, 0, 5)
@@ -115,7 +105,6 @@ Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
--- Minimize Button
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Size = UDim2.new(0, 28, 0, 28)
 MinimizeButton.Position = UDim2.new(1, -33, 0, 5)
@@ -131,14 +120,12 @@ local MinimizeCorner = Instance.new("UICorner")
 MinimizeCorner.CornerRadius = UDim.new(0, 7)
 MinimizeCorner.Parent = MinimizeButton
 
--- Tombol Utama
 local MainButtonsFrame = Instance.new("Frame")
 MainButtonsFrame.Size = UDim2.new(1, -20, 0, 150)
 MainButtonsFrame.Position = UDim2.new(0, 10, 0, 40)
 MainButtonsFrame.BackgroundTransparency = 1
 MainButtonsFrame.Parent = MainFrame
 
--- Record/Save Button
 local RecordSaveButton = Instance.new("TextButton")
 RecordSaveButton.Name = "RecordSaveButton"
 RecordSaveButton.Size = UDim2.new(1, 0, 0, 35)
@@ -155,7 +142,6 @@ local RecordCorner = Instance.new("UICorner")
 RecordCorner.CornerRadius = UDim.new(0, 8)
 RecordCorner.Parent = RecordSaveButton
 
--- Pause/Lanjutkan Button
 local PauseResumeButton = Instance.new("TextButton")
 PauseResumeButton.Name = "PauseResumeButton"
 PauseResumeButton.Size = UDim2.new(1, 0, 0, 35)
@@ -172,7 +158,6 @@ local PauseCorner = Instance.new("UICorner")
 PauseCorner.CornerRadius = UDim.new(0, 8)
 PauseCorner.Parent = PauseResumeButton
 
--- Balik Badan/Normal Button
 local ReverseButton = Instance.new("TextButton")
 ReverseButton.Name = "ReverseButton"
 ReverseButton.Size = UDim2.new(1, 0, 0, 35)
@@ -189,7 +174,6 @@ local ReverseCorner = Instance.new("UICorner")
 ReverseCorner.CornerRadius = UDim.new(0, 8)
 ReverseCorner.Parent = ReverseButton
 
--- Use Custom Anim Button
 local UseAnimButton = Instance.new("TextButton")
 UseAnimButton.Name = "UseAnimButton"
 UseAnimButton.Size = UDim2.new(1, 0, 0, 35)
@@ -206,7 +190,6 @@ local UseAnimCorner = Instance.new("UICorner")
 UseAnimCorner.CornerRadius = UDim.new(0, 8)
 UseAnimCorner.Parent = UseAnimButton
 
--- Save/Load Walk Buttons
 local SaveLoadFrame = Instance.new("Frame")
 SaveLoadFrame.Size = UDim2.new(1, -20, 0, 35)
 SaveLoadFrame.Position = UDim2.new(0, 10, 0, 200)
@@ -245,7 +228,6 @@ local LoadWalkCorner = Instance.new("UICorner")
 LoadWalkCorner.CornerRadius = UDim.new(0, 8)
 LoadWalkCorner.Parent = LoadWalkButton
 
--- Counter Label
 local RecordingCounter = Instance.new("TextLabel")
 RecordingCounter.Size = UDim2.new(1, -20, 0, 25)
 RecordingCounter.Position = UDim2.new(0, 10, 0, 240)
@@ -262,7 +244,6 @@ local CounterCorner = Instance.new("UICorner")
 CounterCorner.CornerRadius = UDim.new(0, 6)
 CounterCorner.Parent = RecordingCounter
 
--- Scroll Frame untuk WALK CP buttons
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "WalkCPList"
 ScrollFrame.Size = UDim2.new(1, -20, 1, -350)
@@ -300,7 +281,6 @@ EmptyLabel.Font = Enum.Font.GothamBold
 EmptyLabel.TextWrapped = true
 EmptyLabel.Parent = ScrollFrame
 
--- Status Panel
 local StatusPanel = Instance.new("Frame")
 StatusPanel.Size = UDim2.new(1, -20, 0, 60)
 StatusPanel.Position = UDim2.new(0, 10, 1, -70)
@@ -346,7 +326,6 @@ AnimText.Font = Enum.Font.GothamBold
 AnimText.TextXAlignment = Enum.TextXAlignment.Left
 AnimText.Parent = StatusPanel
 
--- Fungsi untuk memulai recording
 local function StartRecording()
     if IsRecording then return end
     
@@ -373,7 +352,6 @@ local function StartRecording()
     end)
 end
 
--- Fungsi untuk menghentikan recording dan menyimpan
 local function StopRecording()
     if not IsRecording then return end
     
@@ -409,7 +387,6 @@ local function StopRecording()
     RefreshWalkCPList()
 end
 
--- Fungsi untuk detect state karakter
 local function DetectCharacterState()
     if not Humanoid or not HumanoidRootPart then return "Idle" end
     
@@ -422,7 +399,6 @@ local function DetectCharacterState()
     local isSwimming = Humanoid:GetState() == Enum.HumanoidStateType.Swimming
     local isJumping = Humanoid:GetState() == Enum.HumanoidStateType.Jumping
     
-    -- Tentukan state
     if isSwimming then
         return velocity.Magnitude > 2 and "Swim" or "SwimIdle"
     elseif isClimbing then
@@ -457,20 +433,16 @@ local function StopStateDetection()
     end
 end
 
--- Fungsi untuk memainkan animasi custom
 local function PlayCustomAnimation()
     if not UseCustomAnim then return end
     
-    -- Stop animasi sebelumnya
     if CurrentAnimTrack then
         CurrentAnimTrack:Stop()
         CurrentAnimTrack = nil
     end
     
-    -- Tentukan animasi yang akan diputar
     local animName = CurrentState
     if not CUSTOM_ANIMATIONS[animName] then
-        -- Fallback ke basic animation
         local velocity = HumanoidRootPart.Velocity.Magnitude
         if velocity > 10 then
             animName = "Run"
@@ -481,7 +453,6 @@ local function PlayCustomAnimation()
         end
     end
     
-    -- Mainkan animasi
     if CUSTOM_ANIMATIONS[animName] then
         local animation = Instance.new("Animation")
         animation.AnimationId = CUSTOM_ANIMATIONS[animName]
@@ -490,7 +461,6 @@ local function PlayCustomAnimation()
     end
 end
 
--- Fungsi untuk memainkan ulang rekaman
 local function PlayWalkRecording(recordingName)
     if IsPlaying or not WalkRecordings[recordingName] then return end
     
@@ -504,7 +474,6 @@ local function PlayWalkRecording(recordingName)
     
     ShowNotification("Playing: " .. recordingName, Color3.fromRGB(0, 255, 0))
     
-    -- Mainkan animasi custom jika aktif
     if UseCustomAnim then
         StartStateDetection()
         PlayCustomAnimation()
@@ -549,33 +518,52 @@ local function PlayWalkRecording(recordingName)
             targetPos = recording.positions[currentIndex]
         end
         
-        -- Gunakan BodyPosition untuk animasi natural
         if targetPos then
-            local oldBodyPosition = HumanoidRootPart:FindFirstChild("WalkRecorderBodyPosition")
-            if oldBodyPosition then
-                oldBodyPosition:Destroy()
+            local oldBodyVelocity = HumanoidRootPart:FindFirstChild("WalkRecorderBodyVelocity")
+            local oldBodyGyro = HumanoidRootPart:FindFirstChild("WalkRecorderBodyGyro")
+            if oldBodyVelocity then oldBodyVelocity:Destroy() end
+            if oldBodyGyro then oldBodyGyro:Destroy() end
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Name = "WalkRecorderBodyVelocity"
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
+            bodyVelocity.P = 1000
+            bodyVelocity.Parent = HumanoidRootPart
+            
+            local bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.Name = "WalkRecorderBodyGyro"
+            bodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+            bodyGyro.P = 500
+            bodyGyro.Parent = HumanoidRootPart
+            
+            local direction = (targetPos - HumanoidRootPart.Position)
+            local distance = direction.Magnitude
+            
+            if distance > 1 then
+                if ReverseOrientation then
+                    bodyGyro.CFrame = CFrame.lookAt(HumanoidRootPart.Position, HumanoidRootPart.Position - direction)
+                else
+                    bodyGyro.CFrame = CFrame.lookAt(HumanoidRootPart.Position, HumanoidRootPart.Position + direction)
+                end
+                
+                bodyVelocity.Velocity = direction.Unit * 12
+            else
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                
+                if currentIndex >= #recording.positions - 1 then
+                    StopPlayback()
+                    ShowNotification("✅ Playback Complete", Color3.fromRGB(0, 255, 0))
+                end
             end
             
-            local bodyPosition = Instance.new("BodyPosition")
-            bodyPosition.Name = "WalkRecorderBodyPosition"
-            bodyPosition.Position = targetPos
-            bodyPosition.MaxForce = Vector3.new(4000, 4000, 4000)
-            bodyPosition.P = 10000
-            bodyPosition.Parent = HumanoidRootPart
-            
-            -- Update animasi
             if UseCustomAnim then
                 PlayCustomAnimation()
-            end
-            
-            if ReverseOrientation then
-                HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
             end
         end
     end)
 end
 
--- Fungsi untuk menghentikan playback
 local function StopPlayback()
     IsPlaying = false
     IsPaused = false
@@ -585,25 +573,27 @@ local function StopPlayback()
         PlaybackConnection = nil
     end
     
-    -- Hapus BodyPosition
     if HumanoidRootPart then
         local bodyPosition = HumanoidRootPart:FindFirstChild("WalkRecorderBodyPosition")
-        if bodyPosition then
-            bodyPosition:Destroy()
-        end
+        local bodyVelocity = HumanoidRootPart:FindFirstChild("WalkRecorderBodyVelocity")
+        local bodyGyro = HumanoidRootPart:FindFirstChild("WalkRecorderBodyGyro")
+        
+        if bodyPosition then bodyPosition:Destroy() end
+        if bodyVelocity then bodyVelocity:Destroy() end
+        if bodyGyro then bodyGyro:Destroy() end
     end
     
-    -- Stop state detection
     StopStateDetection()
     
-    -- Stop animasi
     if CurrentAnimTrack then
         CurrentAnimTrack:Stop()
         CurrentAnimTrack = nil
     end
+    
+    PauseResumeButton.Text = "⏸️ PAUSE"
+    PauseResumeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 end
 
--- Fungsi untuk pause/lanjutkan playback
 local function TogglePause()
     if not IsPlaying then return end
     
@@ -615,7 +605,6 @@ local function TogglePause()
     end
 end
 
--- Fungsi save/load
 local function SaveWalkToFile()
     local success, result = pcall(function()
         local data = {}
@@ -673,7 +662,6 @@ local function LoadWalkFromFile()
     end
 end
 
--- Fungsi untuk membuat tombol WALK CP
 local function CreateWalkCPButton(recordingName, recordingData)
     local Button = Instance.new("TextButton")
     Button.Name = recordingName
@@ -821,7 +809,6 @@ local function CreateWalkCPButton(recordingName, recordingData)
     return Button
 end
 
--- Fungsi refresh list WALK CP
 function RefreshWalkCPList()
     for _, child in pairs(ScrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
@@ -844,7 +831,6 @@ function RefreshWalkCPList()
     end
 end
 
--- Fungsi notification
 function ShowNotification(text, color)
     color = color or Color3.fromRGB(0, 155, 0)
     
@@ -881,7 +867,6 @@ function ShowNotification(text, color)
     end)
 end
 
--- Event handlers
 MinimizeButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
     MinimizeIcon.Visible = true
@@ -931,14 +916,18 @@ ReverseButton.MouseButton1Click:Connect(function()
     if ReverseOrientation then
         ReverseButton.Text = "🔄 NORMAL"
         ReverseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        ShowNotification("Balik Badan: AKTIF", Color3.fromRGB(255, 100, 0))
+        
         if HumanoidRootPart then
-            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+            HumanoidRootPart.CFrame = CFrame.lookAt(HumanoidRootPart.Position, HumanoidRootPart.Position - HumanoidRootPart.CFrame.LookVector)
         end
     else
-        ReverseButton.Text = "🔄 BALIK BADAN"
+        ReverseButton.Text = "🔄 BALIK BADAN" 
         ReverseButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        ShowNotification("Balik Badan: NONAKTIF", Color3.fromRGB(100, 100, 100))
+        
         if HumanoidRootPart then
-            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.pi, 0)
+            HumanoidRootPart.CFrame = CFrame.lookAt(HumanoidRootPart.Position, HumanoidRootPart.Position + HumanoidRootPart.CFrame.LookVector)
         end
     end
 end)
@@ -955,7 +944,6 @@ UseAnimButton.MouseButton1Click:Connect(function()
         UseAnimButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
         ShowNotification("Animasi Custom: OFF", Color3.fromRGB(100, 0, 200))
         
-        -- Stop animasi jika sedang bermain
         if CurrentAnimTrack then
             CurrentAnimTrack:Stop()
             CurrentAnimTrack = nil
@@ -973,7 +961,6 @@ LoadWalkButton.MouseButton1Click:Connect(function()
     LoadWalkFromFile()
 end)
 
--- Update status
 spawn(function()
     while wait(0.5) do
         if IsRecording then
@@ -1006,13 +993,11 @@ spawn(function()
     end
 end)
 
--- Cleanup
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart", 10)
     Humanoid = newChar:WaitForChild("Humanoid", 10)
     
-    -- Reload animasi untuk karakter baru
     LoadAnimations()
     
     StopPlayback()
@@ -1023,7 +1008,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
--- Auto-load
 spawn(function()
     wait(1)
     if isfile and isfile(SAVE_FILE_NAME .. ".json") then
