@@ -1,4 +1,4 @@
--- AUTO WALK RECORDER - RECORD SYSTEM WITH SPEED LOCK
+-- AUTO WALK RECORDER - RECORD SYSTEM (SPEED 32)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -43,7 +43,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- Title Bar (untuk drag)
+-- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 25)
 TitleBar.Position = UDim2.new(0, 0, 0, 0)
@@ -56,7 +56,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🔴 RECORDER - SPEED LOCK 32"
+Title.Text = "🔴 RECORDER - SPEED 32"
 Title.TextColor3 = Color3.fromRGB(255, 255, 0)
 Title.TextSize = 14
 Title.Font = Enum.Font.GothamBold
@@ -138,7 +138,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 20)
 StatusLabel.Position = UDim2.new(0, 0, 0, 135)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Status: Ready - Speed will lock to 32"
+StatusLabel.Text = "Status: Ready - Speed auto 32"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatusLabel.TextSize = 10
 StatusLabel.Font = Enum.Font.Gotham
@@ -169,14 +169,14 @@ local function ApplySpeedLock()
     local oldVelocity = rootPart:FindFirstChild("RecordSpeedLock")
     if oldVelocity then oldVelocity:Destroy() end
     
-    -- Buat velocity untuk speed lock
+    -- Buat velocity untuk speed lock 32
     local bodyVelocity = Instance.new("BodyVelocity")
     bodyVelocity.Name = "RecordSpeedLock"
-    bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000) -- X dan Z saja
+    bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
     bodyVelocity.P = 1000
     bodyVelocity.Parent = rootPart
     
-    -- Terus update velocity ke arah movement
+    -- Terus update velocity ke arah movement dengan speed 32
     SpeedConnection = RunService.Heartbeat:Connect(function()
         if not IsRecording or not rootPart then return end
         
@@ -285,7 +285,7 @@ local function SaveToJSON()
             recordingName = "AutoWalk_Speed32",
             points = #CurrentRecording.positions,
             duration = CurrentRecording.timestamps[#CurrentRecording.timestamps],
-            speedLock = 32, -- Tandai bahwa ini recording dengan speed 32
+            speedLock = 32,
             data = {
                 positions = CurrentRecording.positions,
                 timestamps = CurrentRecording.timestamps,
@@ -380,4 +380,3 @@ print("🚀 SPEED LOCK 32 ACTIVE during recording")
 print("1. Click RECORD - Speed auto lock to 32")
 print("2. Move around - Consistent speed 32")
 print("3. Click SAVE JSON - Save recording")
-print("4. Playback will also use speed 32")
